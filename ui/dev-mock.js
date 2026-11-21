@@ -18,11 +18,121 @@ const SCREENSHOT_STATE = {
   settings: { addonsPath: "/Applications/World of Warcraft/_forever_/Interface/AddOns", gameVersionTypeId: 88568, releaseType: 1 },
 };
 
+// Real popular WoW Forever addons from CurseForge (public data), for the Get Addons screenshot.
+const SCREENSHOT_CATALOG = [
+  {
+    "id": 334372,
+    "name": "Questie",
+    "summary": "The Classic Quest Helper",
+    "downloadCount": 228476448,
+    "allowModDistribution": true,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/351/162/256/256/637505206198965674.png"
+    }
+  },
+  {
+    "id": 61284,
+    "name": "Details! Damage Meter",
+    "summary": "Complete combat analysis, gathering damage, healing, and other importante stuff.",
+    "downloadCount": 376869212,
+    "allowModDistribution": false,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/109/996/256/256/636383851490858804.png"
+    }
+  },
+  {
+    "id": 3358,
+    "name": "DBM - Deadly Boss Mods (DBM-Core)",
+    "summary": "A Swiss Army knife that gives you fight info & tools for dungeons & raids. Supporting Midnight, Forever, Mists of Pandaria, Wrath Titan, Burning Crusade, Vanilla.",
+    "downloadCount": 643773173,
+    "allowModDistribution": false,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/199/661/256/256/636908483866103322.png"
+    }
+  },
+  {
+    "id": 6124,
+    "name": "Auctionator",
+    "summary": "Makes it easier to use the auction house and track the value of items",
+    "downloadCount": 215914951,
+    "allowModDistribution": false,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/1403/232/256/256/638909541952729618.png"
+    }
+  },
+  {
+    "id": 84208,
+    "name": "RareScanner",
+    "summary": "RareScanner, a World of Warcraft addon to alert you when a rare, event or treasure appear in your minimap.",
+    "downloadCount": 147470080,
+    "allowModDistribution": true,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/58/841/256/256/636141449063964125.PNG"
+    }
+  },
+  {
+    "id": 1592,
+    "name": "Bagnon",
+    "summary": "See your inventory, bank, guild and alts from anywhere",
+    "downloadCount": 172952144,
+    "allowModDistribution": false,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/647/705/256/256/638048338012580367.png"
+    }
+  },
+  {
+    "id": 94855,
+    "name": "Leatrix Plus (USE THIS ONE)",
+    "summary": "Powerful and modular quality of life addon with a small resource footprint. Supports all WoW games including Midnight and Burning Crusade Classic Anniversary (as well as all the others).",
+    "downloadCount": 79629868,
+    "allowModDistribution": false,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/483/32/256/256/637782408501667202.png"
+    }
+  },
+  {
+    "id": 1710300,
+    "name": "Delete Cheapest Item: Updated for Forever",
+    "summary": "Delete the least valuable junk item in your bags when looting",
+    "downloadCount": 283951,
+    "allowModDistribution": true,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/2068/55/256/256/639258740258861510.png"
+    }
+  },
+  {
+    "id": 1718307,
+    "name": "FlareUI",
+    "summary": "Your friendly UI overhowl for WoW: Forever. Improving Blizzard's UI look and feel without replacing it.",
+    "downloadCount": 223119,
+    "allowModDistribution": true,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/2106/737/256/256/639272312602401423.png"
+    }
+  },
+  {
+    "id": 1707971,
+    "name": "DungeonJournal",
+    "summary": "Check which quests are available for each dungeons, where they are , and what loot bosses drop",
+    "downloadCount": 19321168,
+    "allowModDistribution": true,
+    "logo": {
+      "thumbnailUrl": "https://media.forgecdn.net/avatars/thumbnails/2218/764/256/256/639306029966247610.png"
+    }
+  }
+];
+
+// ?screenshot=browse opens the Get Addons tab.
+if (location.search.includes("screenshot=browse")) {
+  window.addEventListener("load", () => setTimeout(() => document.querySelector('[data-tab="browse"]').click(), 50));
+}
+
 window.__mock = async (cmd, args) => {
   await new Promise((r) => setTimeout(r, SCREENSHOT ? 0 : 150));
   if (SCREENSHOT) {
     if (cmd === "overview") return { ...SCREENSHOT_STATE, autoUpdates: false, hasKey: true, addonsPathExists: true, appVersion: "1.0.0" };
     if (cmd === "check_updates") return [{ modId: 1660202, name: "Spoken Audio: Gossip", versionLabel: "SpokenQuestsAudioGossip 2.7.2", websiteOnly: false }];
+    if (cmd === "browse") return args.excluding.length ? [] : SCREENSHOT_CATALOG;
   }
   const s = window.__mockState ||= {
     installed: [

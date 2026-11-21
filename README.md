@@ -22,6 +22,8 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
   from their page and drop it on the window; it's then tracked for updates.
 - Folders the app didn't install and can't identify are listed but never touched.
 
+<img alt="The Get Addons tab: popular WoW Forever addons from CurseForge with Install and Website buttons" src="docs/images/screenshot-get-addons-dark.png" width="900">
+
 ## Download (v1.0.0)
 | System | Download |
 |---|---|
