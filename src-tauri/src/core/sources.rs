@@ -66,7 +66,8 @@ struct Asset {
 pub async fn latest_release(http: &reqwest::Client, spec: &GitSpec) -> Option<(String, String)> {
     let owner = spec.owner.as_ref()?;
     let url = format!("https://api.github.com/repos/{owner}/{}/releases/latest", spec.repo);
-    let resp = http.get(url).header("Accept", "application/vnd.github+json").send().await.ok()?;
+    let resp = http.get(url).header("Accept", "application/vnd.github+json")
+        .timeout(super::curseforge::API_TIMEOUT).send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }

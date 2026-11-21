@@ -80,14 +80,16 @@ impl Manager {
     pub fn api_key(&self) -> String {
         if let Ok(k) = std::env::var("CURSEFORGE_API_KEY") {
             if !k.is_empty() {
-                return k;
+                return curseforge::clean_key(&k);
             }
         }
-        fs::read_to_string(self.dir.join("api-key")).map(|s| s.trim().to_string()).unwrap_or_default()
+        // Cleaned on read too, so a key saved with invisible characters still works.
+        fs::read_to_string(self.dir.join("api-key")).map(|s| curseforge::clean_key(&s)).unwrap_or_default()
     }
 
     pub fn set_api_key(&self, key: &str) -> R<()> {
-        let k = key.trim().trim_matches(|c| c == '"' || c == '\'');
+        let cleaned = curseforge::clean_key(key);
+        let k = cleaned.as_str();
         let path = self.dir.join("api-key");
         if k.is_empty() {
             let _ = fs::remove_file(path);

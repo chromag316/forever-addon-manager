@@ -96,3 +96,12 @@ fn network_smoke() {
         assert!(!page.popular.is_empty());
     });
 }
+
+#[test]
+fn keys_are_cleaned_of_pasted_junk() {
+    use super::curseforge::clean_key;
+    let key = "$2a$10$abcDEF123";
+    for pasted in [" $2a$10$abcDEF123\n", "\"$2a$10$abcDEF123\"", "$2a$10$abc\u{200B}DEF123", "\u{FEFF}$2a$10$abcDEF123\u{00A0}"] {
+        assert_eq!(clean_key(pasted), key, "{pasted:?}");
+    }
+}

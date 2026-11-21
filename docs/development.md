@@ -20,6 +20,7 @@ HTML/CSS/JS, the addon logic is Rust.
 | `src-tauri/icons/` | App icons, generated from `Resources/AppIcon-1024.png` |
 | `Scripts/` | macOS Swift scripts that draw the app icon and other image helpers |
 | `.github/workflows/build.yml` | CI: build, test and release |
+| `packaging/aur/` | Arch Linux (AUR) package: `PKGBUILD`, `.SRCINFO`, `update.sh` |
 
 ## Run and build
 ```bash
@@ -51,7 +52,7 @@ Run them with `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored`.
    The tag must match the version in `tauri.conf.json`, or the release job stops.
 
 CI then builds the installers (`Forever-AddOn-Manager-<version>-macOS.dmg`,
-`…-Windows-x64-setup.exe`, `…-Linux-x86_64.AppImage`, `…-Linux-amd64.deb`) and publishes the
+`…-Windows-x64-setup.exe`, `…-Linux-amd64.deb`, `…-Linux-x86_64.rpm`) and publishes the
 release. It also deletes an older release with the same tag, and draft releases whose tag no
 longer exists (deleting a tag turns its release into a hidden draft).
 
@@ -64,3 +65,23 @@ npx tauri icon Resources/AppIcon-1024.png -o src-tauri/icons
 ```
 Then delete the `android/`, `ios/` and Windows Store (`Square*`, `StoreLogo`) images it also
 creates; only the desktop icons are used.
+
+## Arch Linux (AUR)
+`packaging/aur/` holds the `forever-addon-manager-bin` package. It installs the release's `.deb`,
+lets pacman provide WebKitGTK (`webkit2gtk-4.1`), and installs `LICENSE` (fetched from the release
+tag) to `/usr/share/licenses/`, as Arch requires for MIT-licensed packages. `.SRCINFO` is generated
+by `update.sh`. There's no AppImage: it would have to bundle
+WebKitGTK itself and comes out around 80 MB.
+
+After publishing a release:
+```bash
+packaging/aur/update.sh 1.2.3        # sets pkgver, the .deb's sha256 and regenerates .SRCINFO
+```
+Then publish to the AUR from a clone of the AUR repository (needs an AUR account with your SSH key):
+```bash
+git clone ssh://aur@aur.archlinux.org/forever-addon-manager-bin.git
+cp packaging/aur/PKGBUILD packaging/aur/.SRCINFO forever-addon-manager-bin/
+cd forever-addon-manager-bin && git add PKGBUILD .SRCINFO && git commit -m "Update to 1.2.3" && git push
+```
+On an Arch machine, `makepkg -si` in `packaging/aur/` builds and installs the package locally, and
+`makepkg --printsrcinfo` should match the generated `.SRCINFO`.

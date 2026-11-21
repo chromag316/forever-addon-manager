@@ -8,8 +8,9 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
 |---|---|
 | macOS 11+ (Intel and Apple Silicon) | [Forever-AddOn-Manager-1.0.0-macOS.dmg](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-macOS.dmg) |
 | Windows 10/11 | [Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe) |
-| Linux (x86_64) | [Forever-AddOn-Manager-1.0.0-Linux-x86_64.AppImage](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-x86_64.AppImage) |
 | Debian / Ubuntu | [Forever-AddOn-Manager-1.0.0-Linux-amd64.deb](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-amd64.deb) |
+| Fedora / openSUSE | [Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm) |
+| Arch Linux | `forever-addon-manager-bin` from the AUR |
 
 Release notes and all files: [v1.0.0](https://github.com/chromag316/forever-addon-manager/releases/tag/v1.0.0).
 Newer versions, if any, are on the [latest release](https://github.com/chromag316/forever-addon-manager/releases/latest) page.
@@ -19,7 +20,11 @@ Newer versions, if any, are on the [latest release](https://github.com/chromag31
   first time right-click it and choose **Open**.
 - **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose
   **More info → Run anyway**.
-- **Linux:** `chmod +x` the AppImage and run it, or install the .deb.
+- **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.0.0-Linux-amd64.deb`
+- **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm`
+  (openSUSE: `sudo zypper install …`)
+- **Arch Linux:** install `forever-addon-manager-bin` with your AUR helper, e.g.
+  `yay -S forever-addon-manager-bin`
 
 Then open **Settings**, paste your free CurseForge API key from
 [console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check that the
@@ -49,6 +54,8 @@ App data (`state.json` and the API key file, readable only by you):
 - Linux: `~/.local/share/ForeverAddons`
 
 Building from source or contributing: see [docs/development.md](docs/development.md).
+
+Licensed under the [MIT License](LICENSE).
 
 Not affiliated with Blizzard Entertainment or CurseForge/Overwolf.
 The Git logo is by [Jason Long](https://git-scm.com/downloads/logos), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).

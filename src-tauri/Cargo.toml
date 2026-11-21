@@ -2,6 +2,7 @@
 name = "forever-addon-manager"
 version = "1.0.0"
 description = "Addon manager for WoW Forever"
+license = "MIT"
 edition = "2021"
 
 [lib]

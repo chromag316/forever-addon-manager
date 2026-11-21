@@ -166,7 +166,7 @@ async fn set_key(m: Shared<'_>, key: String) -> R<()> {
 #[tauri::command]
 async fn test_key(m: Shared<'_>, key: Option<String>) -> R<String> {
     let api = match key {
-        Some(k) => crate::core::curseforge::Api::new(k.trim().trim_matches(|c| c == '"' || c == '\'').to_string()),
+        Some(k) => crate::core::curseforge::Api::new(k), // Api::new cleans the key
         None => m.lock().await.api(),
     };
     Ok(api.diagnose_key().await)

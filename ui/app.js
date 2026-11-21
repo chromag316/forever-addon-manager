@@ -87,7 +87,9 @@ function renderBanners() {
       <button data-url="https://console.curseforge.com/">Get a key</button><button data-action="settings">Open Settings…</button></div>`);
   }
   const close = (what) => `<button class="close" data-dismiss="${what}" title="Dismiss" aria-label="Dismiss">${icon("i-close")}</button>`;
-  if (error) parts.push(`<div class="banner warning" role="alert">${icon("i-warning")}<span class="text">${esc(error)}</span>${close("error")}</div>`);
+  // Key problems get a direct way to fix them.
+  const keyIssue = error && /API key/.test(error) ? `<button data-action="settings">Open Settings</button>` : "";
+  if (error) parts.push(`<div class="banner warning" role="alert">${icon("i-warning")}<span class="text">${esc(error)}</span>${keyIssue}${close("error")}</div>`);
   if (notice) parts.push(`<div class="banner notice" role="status">${icon("i-info")}<span class="text">${esc(notice)}</span>${close("notice")}</div>`);
   $("#banners").innerHTML = parts.join("");
 }
@@ -466,8 +468,19 @@ $("#folder-choose").onclick = async () => {
 
 $("#set-key-save").onclick = async () => {
   const hadKey = ov.hasKey;
+  const key = $("#set-key").value.trim();
   try {
-    await invoke("set_key", { key: $("#set-key").value });
+    if (key) {
+      // Check with CurseForge first; don't replace a working key with one it rejects.
+      $("#key-report").hidden = false;
+      $("#key-report").textContent = "Checking the key with CurseForge…";
+      const report = await invoke("test_key", { key });
+      if (!report.includes("✅")) {
+        $("#key-report").textContent = report + "\n\nThe key was not saved.";
+        return;
+      }
+    }
+    await invoke("set_key", { key });
     $("#set-key").value = "";
     $("#key-report").hidden = true;
     await refresh();
@@ -476,9 +489,11 @@ $("#set-key-save").onclick = async () => {
   } catch (e) { error = String(e); render(); }
 };
 $("#set-key-test").onclick = async () => {
+  // Tests the key typed in the field, or the saved key if the field is empty.
+  const key = $("#set-key").value.trim();
   $("#key-report").hidden = false;
   $("#key-report").textContent = "Testing…";
-  $("#key-report").textContent = await invoke("test_key").catch(String);
+  $("#key-report").textContent = await invoke("test_key", key ? { key } : {}).catch(String);
 };
 $("#set-path-choose").onclick = async () => {
   if (!T) return;

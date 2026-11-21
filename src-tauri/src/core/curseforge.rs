@@ -10,6 +10,18 @@ use tokio::io::AsyncWriteExt;
 
 pub const WOW_GAME_ID: i64 = 1;
 const BASE: &str = "https://api.curseforge.com";
+/// Limit for one API call. Downloads have no overall limit (addon zips can be large).
+pub const API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+pub const KEY_REJECTED: &str = "CurseForge didn't accept your API key. Check it in Settings → Test Key.";
+
+/// Removes everything that can't be part of a CurseForge key but often comes along when
+/// pasting: spaces, line breaks, zero-width and non-breaking spaces, control characters, quotes.
+pub fn clean_key(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| !c.is_whitespace() && !c.is_control())
+        .filter(|c| !matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}' | '"' | '\'' | '“' | '”'))
+        .collect()
+}
 
 #[derive(Deserialize)]
 struct Envelope<T> {
@@ -32,31 +44,36 @@ pub fn http_client() -> reqwest::Client {
 
 impl Api {
     pub fn new(key: String) -> Self {
-        Api { key, http: http_client() }
+        Api { key: clean_key(&key), http: http_client() }
     }
 
     async fn send<T: DeserializeOwned>(&self, req: reqwest::RequestBuilder) -> Result<T, String> {
         if self.key.is_empty() {
             return Err("No CurseForge API key set. Get one at console.curseforge.com and add it in Settings.".into());
         }
-        let resp = req
-            .header("x-api-key", &self.key)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| if e.is_connect() || e.is_timeout() {
-                "Couldn't connect to CurseForge. Check your internet connection, or allow Forever AddOn Manager in your firewall.".to_string()
-            } else {
-                format!("Couldn't reach CurseForge: {e}")
-            })?;
-        let status = resp.status();
-        let body = resp.text().await.map_err(|e| e.to_string())?;
-        if !status.is_success() {
-            let snippet: String = body.chars().take(200).collect();
-            return Err(format!("CurseForge refused the request (HTTP {}){}", status.as_u16(),
-                               if snippet.is_empty() { String::new() } else { format!(": {snippet}") }));
+        let req = req.header("x-api-key", &self.key).header("Accept", "application/json").timeout(API_TIMEOUT);
+        let retry = req.try_clone();
+        let mut resp = req.send().await.map_err(connect_error)?;
+        // Rate limited: wait as long as CurseForge asks (capped), then try once more.
+        if resp.status().as_u16() == 429 {
+            if let Some(again) = retry {
+                let wait = resp.headers().get("retry-after").and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok()).unwrap_or(3).clamp(1, 10);
+                tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+                resp = again.send().await.map_err(connect_error)?;
+            }
         }
-        serde_json::from_str::<Envelope<T>>(&body).map(|e| e.data).map_err(|e| format!("Unexpected reply from CurseForge: {e}"))
+        let status = resp.status().as_u16();
+        let body = resp.text().await.map_err(connect_error)?;
+        match status {
+            200..=299 => serde_json::from_str::<Envelope<T>>(&body).map(|e| e.data)
+                .map_err(|e| format!("Unexpected reply from CurseForge: {e}")),
+            401 => Err(KEY_REJECTED.into()),
+            403 => Err("CurseForge doesn't allow this request with your API key (HTTP 403).".into()),
+            429 => Err("CurseForge is limiting requests right now. Try again in a minute.".into()),
+            500..=599 => Err(format!("CurseForge is having problems right now (HTTP {status}). Try again later.")),
+            _ => Err(format!("CurseForge refused the request (HTTP {status}).")),
+        }
     }
 
     fn get(&self, path: &str) -> reqwest::RequestBuilder {
@@ -122,7 +139,7 @@ impl Api {
         if !(self.key.starts_with("$2a$") || self.key.starts_with("$2b$") || self.key.starts_with("$2y$")) {
             notes.push("It doesn't look like a CurseForge key (those start with \"$2a$10$\" and are about 60 characters).".into());
         }
-        match self.get(&format!("/v1/games/{WOW_GAME_ID}")).header("x-api-key", &self.key).send().await {
+        match self.get(&format!("/v1/games/{WOW_GAME_ID}")).header("x-api-key", &self.key).timeout(API_TIMEOUT).send().await {
             Ok(r) if r.status().is_success() => notes.push("✅ CurseForge accepted the key.".into()),
             Ok(r) => notes.push(format!("❌ CurseForge answered HTTP {}", r.status().as_u16())),
             Err(e) => notes.push(format!("❌ Network error: {e}")),
@@ -143,4 +160,14 @@ pub async fn download(http: &reqwest::Client, url: &str, dest: &Path) -> Result<
         file.write_all(&chunk.map_err(|e| format!("Download interrupted: {e}"))?).await.map_err(|e| e.to_string())?;
     }
     file.flush().await.map_err(|e| e.to_string())
+}
+
+fn connect_error(e: reqwest::Error) -> String {
+    if e.is_timeout() {
+        "CurseForge didn't answer in time. Check your internet connection and try again.".into()
+    } else if e.is_connect() {
+        "Couldn't connect to CurseForge. Check your internet connection, or allow Forever AddOn Manager in your firewall.".into()
+    } else {
+        format!("Couldn't reach CurseForge: {e}")
+    }
 }

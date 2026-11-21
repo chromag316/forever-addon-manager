@@ -27,7 +27,7 @@ jobs:
             args: --bundles nsis
           - name: Linux
             os: ubuntu-22.04
-            args: --bundles appimage,deb
+            args: --bundles deb,rpm
 
     steps:
       - uses: actions/checkout@v7
@@ -36,7 +36,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -71,8 +71,8 @@ jobs:
           collect() { find src-tauri/target -path "*/release/bundle/$1/*" -name "$2" -type f | while read -r f; do cp "$f" "out/$N-$3"; done; }
           collect dmg      '*.dmg'        macOS.dmg
           collect nsis     '*-setup.exe'  Windows-x64-setup.exe
-          collect appimage '*.AppImage'   Linux-x86_64.AppImage
           collect deb      '*.deb'        Linux-amd64.deb
+          collect rpm      '*.rpm'        Linux-x86_64.rpm
           ls -la out
           [ -n "$(ls out)" ] || { echo "::error::No installer was produced"; exit 1; }
 
@@ -116,12 +116,14 @@ jobs:
             |---|---|
             | macOS 11+ (Intel and Apple Silicon) | `Forever-AddOn-Manager-…-macOS.dmg` |
             | Windows 10/11 | `Forever-AddOn-Manager-…-Windows-x64-setup.exe` |
-            | Linux | `Forever-AddOn-Manager-…-Linux-x86_64.AppImage`, or the `.deb` for Debian/Ubuntu |
+            | Debian / Ubuntu | `Forever-AddOn-Manager-…-Linux-amd64.deb` |
+            | Fedora / openSUSE | `Forever-AddOn-Manager-…-Linux-x86_64.rpm` |
+            | Arch Linux | `forever-addon-manager-bin` from the AUR |
 
             ## First start
             - **macOS:** open the .dmg and drag the app to Applications. The app isn't notarized by Apple, so the first time right-click it and choose **Open**.
             - **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
-            - **Linux:** make the AppImage executable (`chmod +x`) and run it, or install the .deb.
+            - **Linux:** install the .deb (`sudo apt install ./Forever-AddOn-Manager-…-Linux-amd64.deb`) or the .rpm (`sudo dnf install ./Forever-AddOn-Manager-…-Linux-x86_64.rpm`). On Arch, install `forever-addon-manager-bin` from the AUR.
 
             Then open **Settings** in the app, paste your free CurseForge API key from [console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check the AddOns folder there too; your WoW Forever addons are found automatically.
 
