@@ -3,6 +3,8 @@
 A small, fast addon manager for **WoW Forever** (`_forever_`) for macOS, Windows and Linux,
 built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForge app.
 
+<img alt="Forever AddOn Manager showing installed CurseForge and Git addons, with one update available" src="docs/images/screenshot-dark.png" width="900">
+
 ## Download (v1.0.0)
 | System | Download |
 |---|---|
