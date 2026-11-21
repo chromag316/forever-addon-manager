@@ -1,0 +1,142 @@
+# Builds and tests Forever AddOn Manager on macOS, Windows and Linux.
+# Pushing a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`) also publishes a
+# GitHub Release with the installers. The tag must match "version" in src-tauri/tauri.conf.json.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-15
+            args: --target universal-apple-darwin --bundles dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: Windows
+            os: windows-2022
+            args: --bundles nsis
+          - name: Linux
+            os: ubuntu-22.04
+            args: --bundles appimage,deb
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Test
+        shell: bash
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build
+        shell: bash
+        run: |
+          npm ci
+          npx tauri build ${{ matrix.args }}
+
+      - name: Collect installers (named with the version)
+        shell: bash
+        run: |
+          set -euo pipefail
+          V=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          N="Forever-AddOn-Manager-$V"
+          mkdir -p out
+          # `find` instead of ** globs: macOS runners ship bash 3.2, which has no globstar.
+          collect() { find src-tauri/target -path "*/release/bundle/$1/*" -name "$2" -type f | while read -r f; do cp "$f" "out/$N-$3"; done; }
+          collect dmg      '*.dmg'        macOS.dmg
+          collect nsis     '*-setup.exe'  Windows-x64-setup.exe
+          collect appimage '*.AppImage'   Linux-x86_64.AppImage
+          collect deb      '*.deb'        Linux-amd64.deb
+          ls -la out
+          [ -n "$(ls out)" ] || { echo "::error::No installer was produced"; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: out/
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check tag matches app version
+        run: |
+          V=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "::error::Tag ${GITHUB_REF_NAME} doesn't match app version $V"; exit 1; }
+      - uses: actions/download-artifact@v8
+        with:
+          path: out
+          merge-multiple: true
+      - name: Remove any older release with this tag (e.g. a leftover draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id"); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+            echo "::notice::Deleted older release $id for $GITHUB_REF_NAME"
+          done
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: Forever AddOn Manager ${{ github.ref_name }}
+          files: out/*
+          body: |
+            ## Download
+            | System | File |
+            |---|---|
+            | macOS 11+ (Intel and Apple Silicon) | `Forever-AddOn-Manager-…-macOS.dmg` |
+            | Windows 10/11 | `Forever-AddOn-Manager-…-Windows-x64-setup.exe` |
+            | Linux | `Forever-AddOn-Manager-…-Linux-x86_64.AppImage`, or the `.deb` for Debian/Ubuntu |
+
+            ## First start
+            - **macOS:** open the .dmg and drag the app to Applications. The app isn't notarized by Apple, so the first time right-click it and choose **Open**.
+            - **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
+            - **Linux:** make the AppImage executable (`chmod +x`) and run it, or install the .deb.
+
+            Then open **Settings** in the app, paste your free CurseForge API key from [console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check the AddOns folder there too; your WoW Forever addons are found automatically.
+
+            The "Source code" files are added by GitHub to every release; you don't need them.
+
+      - name: Delete draft releases whose tag no longer exists
+        # Deleting a tag turns its release into a hidden draft; clean those up.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tags=$(gh api "repos/$GITHUB_REPOSITORY/tags" --paginate --jq '.[].name')
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[] | select(.draft) | "\(.id) \(.tag_name)"' |
+          while read -r id tag; do
+            if ! printf '%s\n' $tags | grep -qx "$tag"; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+              echo "::notice::Deleted orphaned draft release $id ($tag)"
+            fi
+          done
