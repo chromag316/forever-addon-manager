@@ -1,36 +1,9 @@
 # Forever AddOn Manager
 
-A small, fast addon manager for **WoW Forever** (`_forever_`) for macOS, Windows and Linux,
+A small, fast addon manager for **WoW Forever** for macOS, Windows and Linux,
 built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForge app.
 
 <img alt="Forever AddOn Manager showing installed CurseForge and Git addons, with one update available" src="docs/images/screenshot-dark.png" width="900">
-
-## Download (v1.0.0)
-| System | Download |
-|---|---|
-| macOS 11+ (Intel and Apple Silicon) | [Forever-AddOn-Manager-1.0.0-macOS.dmg](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-macOS.dmg) |
-| Windows 10/11 | [Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe) |
-| Debian / Ubuntu | [Forever-AddOn-Manager-1.0.0-Linux-amd64.deb](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-amd64.deb) |
-| Fedora / openSUSE | [Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm) |
-| Arch Linux | `forever-addon-manager-bin` from the AUR |
-
-Release notes and all files: [v1.0.0](https://github.com/chromag316/forever-addon-manager/releases/tag/v1.0.0).
-Newer versions, if any, are on the [latest release](https://github.com/chromag316/forever-addon-manager/releases/latest) page.
-
-**First start**
-- **macOS:** open the .dmg and drag the app to Applications. It isn't notarized by Apple, so the
-  first time right-click it and choose **Open**.
-- **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose
-  **More info → Run anyway**.
-- **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.0.0-Linux-amd64.deb`
-- **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm`
-  (openSUSE: `sudo zypper install …`)
-- **Arch Linux:** install `forever-addon-manager-bin` with your AUR helper, e.g.
-  `yay -S forever-addon-manager-bin`
-
-Then open **Settings**, paste your free CurseForge API key from
-[console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check that the
-AddOns folder points at your WoW Forever installation; your addons are found automatically.
 
 ## Features
 - **Finds your addons**: fingerprints each folder in `Interface/AddOns` the same way CurseForge
@@ -48,6 +21,39 @@ AddOns folder points at your WoW Forever installation; your addons are found aut
 - **Website-only addons**: some authors only allow downloads from CurseForge. Download the zip
   from their page and drop it on the window; it's then tracked for updates.
 - Folders the app didn't install and can't identify are listed but never touched.
+
+## Download (v1.0.0)
+| System | Download |
+|---|---|
+| macOS 11+ (Intel and Apple Silicon) | [Forever-AddOn-Manager-1.0.0-macOS.dmg](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-macOS.dmg) |
+| Windows 10/11 | [Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe) |
+| Debian / Ubuntu | [Forever-AddOn-Manager-1.0.0-Linux-amd64.deb](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-amd64.deb) |
+| Fedora / openSUSE | [Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm) |
+| Arch Linux | Build the package from [packaging/aur](packaging/aur) (see below) |
+
+Release notes and all files: [v1.0.0](https://github.com/chromag316/forever-addon-manager/releases/tag/v1.0.0).
+Newer versions, if any, are on the [latest release](https://github.com/chromag316/forever-addon-manager/releases/latest) page.
+
+**First start**
+- **macOS:** open the .dmg and drag the app to Applications. It isn't notarized by Apple, so the
+  first time right-click it and choose **Open**.
+- **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose
+  **More info → Run anyway**.
+- **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.0.0-Linux-amd64.deb`
+- **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm`
+  (openSUSE: `sudo zypper install …`)
+- **Arch Linux:** the package isn't on the AUR yet. Build and install it from this repository:
+  ```bash
+  git clone https://github.com/chromag316/forever-addon-manager.git
+  cd forever-addon-manager/packaging/aur
+  makepkg -si
+  ```
+  This downloads the release's .deb, checks its checksum, and installs the app with pacman,
+  including its dependency `webkit2gtk-4.1`.
+
+Then open **Settings**, paste your free CurseForge API key from
+[console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check that the
+AddOns folder points at your WoW Forever installation; your addons are found automatically.
 
 ## Where things are stored
 App data (`state.json` and the API key file, readable only by you):
