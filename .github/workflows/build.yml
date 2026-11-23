@@ -76,6 +76,55 @@ jobs:
           ls -la out
           [ -n "$(ls out)" ] || { echo "::error::No installer was produced"; exit 1; }
 
+      # Windows code signing through SignPath (free for open source, certificate by SignPath
+      # Foundation). Only release tags are signed, and only once the repository variables
+      # SIGNPATH_ORGANIZATION_ID and SIGNPATH_PROJECT_SLUG plus the secret SIGNPATH_API_TOKEN
+      # are set; until then the installer is published unsigned as before.
+      # SignPath only accepts artifacts uploaded by this workflow on GitHub-hosted runners.
+      - name: Prepare installer for signing
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p to-sign
+          for f in out/*-setup.exe; do mv "$f" "to-sign/$(basename "${f%.exe}")-unsigned.exe"; done
+          ls -la to-sign
+
+      - name: Upload unsigned installer for SignPath
+        id: unsigned
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: Windows-unsigned
+          path: to-sign/
+
+      - name: Sign installer with SignPath
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Release signing needs a manual approval in SignPath, so give it up to an hour.
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Use signed installer
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          Get-ChildItem signed -Filter *-unsigned.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            if ($sig.Status -ne 'Valid') { throw "$($_.Name) is not validly signed: $($sig.Status)" }
+            Write-Host "$($_.Name) signed by $($sig.SignerCertificate.Subject)"
+            Move-Item $_.FullName ("out/" + ($_.Name -replace '-unsigned\.exe$', '.exe'))
+          }
+          Get-ChildItem out
+          if (-not (Get-ChildItem out -Filter *-setup.exe)) { throw "No signed installer in out/" }
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
@@ -98,6 +147,8 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      - name: Leave out the unsigned Windows installer (it was only uploaded for SignPath)
+        run: rm -f out/*-unsigned.exe && ls -la out
       - name: Remove any older release with this tag (e.g. a leftover draft)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -122,7 +173,7 @@ jobs:
 
             ## First start
             - **macOS:** open the .dmg and drag the app to Applications. The app isn't notarized by Apple, so the first time right-click it and choose **Open**.
-            - **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
+            - **Windows:** run the installer. If SmartScreen shows "Windows protected your PC" (it can for new releases until enough people have downloaded them), choose **More info → Run anyway**.
             - **Linux:** install the .deb (`sudo apt install ./Forever-AddOn-Manager-…-Linux-amd64.deb`) or the .rpm (`sudo dnf install ./Forever-AddOn-Manager-…-Linux-x86_64.rpm`). On Arch, install `forever-addon-manager-bin` from the AUR.
 
             Then open **Settings** in the app, paste your free CurseForge API key from [console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check the AddOns folder there too; your WoW Forever addons are found automatically.

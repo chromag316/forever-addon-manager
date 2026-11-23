@@ -39,8 +39,8 @@ Newer versions, if any, are on the [latest release](https://github.com/chromag31
 **First start**
 - **macOS:** open the .dmg and drag the app to Applications. It isn't notarized by Apple, so the
   first time right-click it and choose **Open**.
-- **Windows:** run the installer. If SmartScreen warns about an unknown publisher, choose
-  **More info → Run anyway**.
+- **Windows:** run the installer. If SmartScreen shows "Windows protected your PC" (it can for
+  new releases until enough people have downloaded them), choose **More info → Run anyway**.
 - **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.0.0-Linux-amd64.deb`
 - **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm`
   (openSUSE: `sudo zypper install …`)
@@ -62,6 +62,21 @@ App data (`state.json` and the API key file, readable only by you):
 - macOS: `~/Library/Application Support/ForeverAddons`
 - Windows: `%APPDATA%\ForeverAddons`
 - Linux: `~/.local/share/ForeverAddons`
+
+## Code signing policy
+Free code signing for the Windows installer is provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [chromag316](https://github.com/chromag316)
+- Approvers: [chromag316](https://github.com/chromag316)
+
+Only installers built by this repository's [GitHub Actions workflow](.github/workflows/build.yml)
+from a release tag are signed.
+
+**Privacy:** this program doesn't send any information to other networked systems unless you ask
+it to. It contacts the CurseForge API (with your own API key) and GitHub or the Git host you
+enter, to search for, install and update addons, including the automatic update check, which you
+can turn off in Settings.
 
 Building from source or contributing: see [docs/development.md](docs/development.md).
 
