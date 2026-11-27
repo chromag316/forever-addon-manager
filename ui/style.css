@@ -15,6 +15,7 @@
   --banner-info: #2b7de9;
   --banner-warning: #c9771a;
   --banner-notice: #2f9a55;
+  --badge: #b5650d;
   --shadow: 0 8px 30px rgba(0, 0, 0, .18);
   --radius: 10px;
 }
@@ -32,6 +33,7 @@
     --banner-info: #1f3550;
     --banner-warning: #4a3417;
     --banner-notice: #26382a;
+    --badge: #f0a04b;
   }
 }
 
@@ -113,6 +115,14 @@ main { flex: 1; overflow: auto; }
 .ok svg { width: 18px; height: 18px; }
 .muted { color: var(--muted); font-size: 12px; }
 .count { color: var(--muted); font-size: 12px; min-width: 40px; text-align: right; }
+/* Marks addons whose author only allows downloads on the CurseForge website. */
+.badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; vertical-align: 1px;
+  font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap;
+  color: var(--badge); border: 1px solid currentColor;
+}
+.list-status { margin: 10px 4px 0; text-align: center; }
+.list-status:empty { display: none; }
 
 /* Buttons and fields */
 .btn {

@@ -227,53 +227,80 @@ impl Manager {
 
     // ---- Updates ----
 
-    pub async fn check_updates(&mut self) -> R<Vec<PendingUpdate>> {
+    /// Checks CurseForge and Git addons. A CurseForge failure is reported in `error` but
+    /// doesn't stop the Git checks.
+    pub async fn check_updates(&mut self) -> UpdateCheck {
         let mut updates = vec![];
-        let s = self.state.settings.clone();
-        let tracked: Vec<InstalledAddon> = self.state.installed.iter()
-            .filter(|a| !a.ignored && a.kind() == AddonSource::Curseforge).cloned().collect();
-        if !tracked.is_empty() && !self.api_key().is_empty() {
-            let api = self.api();
-            let ids: Vec<i64> = tracked.iter().map(|a| a.mod_id).collect();
-            for m in api.mods(&ids).await? {
-                let Some(addon) = tracked.iter().find(|a| a.mod_id == m.id) else { continue };
-                if let Some(best) = api.best_file(&m, s.game_version_type_id, s.release_type).await? {
-                    if best.id > addon.file_id {
-                        updates.push(PendingUpdate {
-                            mod_id: addon.mod_id, name: addon.name.clone(),
-                            version_label: best.display_name.clone().unwrap_or_else(|| best.file_name.clone()),
-                            website_only: best.download_url.is_none(), file: Some(best),
-                        });
-                    }
-                }
-            }
-        }
+        let error = self.check_curseforge_updates(&mut updates).await.err();
         let gits: Vec<InstalledAddon> = self.state.installed.iter()
             .filter(|a| !a.ignored && a.kind() == AddonSource::Git).cloned().collect();
         for addon in gits {
             // One unreachable repo shouldn't block the other checks.
-            if let Ok(Some(r)) = self.latest_git_ref(&addon).await {
-                if Some(&r) != addon.git_ref.as_ref() {
+            if let Ok(Some(u)) = self.git_update(&addon).await {
+                updates.push(u);
+            }
+        }
+        self.pending = updates.iter().map(|u| (u.mod_id, u.clone())).collect();
+        UpdateCheck { updates, error }
+    }
+
+    async fn check_curseforge_updates(&self, updates: &mut Vec<PendingUpdate>) -> R<()> {
+        let s = self.state.settings.clone();
+        let tracked: Vec<InstalledAddon> = self.state.installed.iter()
+            .filter(|a| !a.ignored && a.kind() == AddonSource::Curseforge).cloned().collect();
+        if tracked.is_empty() || self.api_key().is_empty() {
+            return Ok(());
+        }
+        let api = self.api();
+        let ids: Vec<i64> = tracked.iter().map(|a| a.mod_id).collect();
+        for m in api.mods(&ids).await? {
+            let Some(addon) = tracked.iter().find(|a| a.mod_id == m.id) else { continue };
+            if let Some(best) = api.best_file(&m, s.game_version_type_id, s.release_type).await? {
+                if best.id > addon.file_id {
+                    let website_only = best.download_url.is_none() || m.allow_mod_distribution == Some(false);
                     updates.push(PendingUpdate {
-                        mod_id: addon.mod_id, name: addon.name.clone(), version_label: short_ref(&r),
-                        website_only: false, file: None,
+                        mod_id: addon.mod_id, name: addon.name.clone(),
+                        version_label: best.display_name.clone().unwrap_or_else(|| best.file_name.clone()),
+                        website_only,
+                        download_page: website_only.then(|| m.download_page(Some(best.id))).flatten(),
+                        commit: None, file: Some(best),
                     });
                 }
             }
         }
-        self.pending = updates.iter().map(|u| (u.mod_id, u.clone())).collect();
-        Ok(updates)
+        Ok(())
     }
 
-    async fn latest_git_ref(&self, addon: &InstalledAddon) -> R<Option<String>> {
+    /// A pending update for a Git addon, labelled with its .toc version when we can read it.
+    async fn git_update(&self, addon: &InstalledAddon) -> R<Option<PendingUpdate>> {
         let Some(src) = &addon.source_url else { return Ok(None) };
         let spec = GitSpec::parse(src)?;
+        let pending = |label: String, commit: Option<String>| PendingUpdate {
+            mod_id: addon.mod_id, name: addon.name.clone(), version_label: label,
+            website_only: false, download_page: None, commit, file: None,
+        };
         if addon.git_from_release == Some(true) {
-            if let Some((tag, _)) = sources::latest_release(&self.http, &spec).await {
-                return Ok(Some(tag));
-            }
+            // If GitHub doesn't answer (e.g. its 60 requests/hour limit), skip this round
+            // instead of comparing the installed tag with a commit ID and showing a false update.
+            return Ok(match sources::latest_release(&self.http, &spec).await {
+                Some((tag, _)) if Some(&tag) != addon.git_ref.as_ref() => Some(pending(tag, None)),
+                _ => None,
+            });
         }
-        tokio::task::spawn_blocking(move || sources::remote_head(&spec)).await.map_err(|e| e.to_string())?.map(Some)
+        let s = spec.clone();
+        let sha = tokio::task::spawn_blocking(move || sources::remote_head(&s)).await.map_err(|e| e.to_string())??;
+        if Some(&sha) == addon.git_ref.as_ref() {
+            return Ok(None);
+        }
+        let version = match addon.folders.first() {
+            Some(folder) => sources::github_toc_version(&self.http, &spec, &sha, folder).await,
+            None => None,
+        };
+        // Show the version only when it differs from what's installed; otherwise the commit.
+        Ok(Some(match version {
+            Some(v) if Some(&v) != addon.display_name.as_ref() => pending(v, None),
+            _ => pending(short_ref(&sha), Some(short_ref(&sha))),
+        }))
     }
 
     pub async fn update(&mut self, mod_id: i64) -> R<()> {
@@ -287,43 +314,53 @@ impl Manager {
         Ok(())
     }
 
-    /// Installs every pending update that can be downloaded here; returns (updated, failed) names.
-    pub async fn update_all(&mut self) -> (Vec<String>, Vec<String>) {
-        let mut todo: Vec<PendingUpdate> = self.pending.values().filter(|u| !u.website_only).cloned().collect();
-        todo.sort_by_key(|u| u.name.to_lowercase());
-        let (mut ok, mut failed) = (vec![], vec![]);
-        for u in todo {
+    /// Installs every pending update that can be downloaded here; website-only ones are
+    /// listed as skipped.
+    pub async fn update_all(&mut self) -> UpdateAllResult {
+        let mut all: Vec<PendingUpdate> = self.pending.values().cloned().collect();
+        all.sort_by_key(|u| u.name.to_lowercase());
+        let mut result = UpdateAllResult::default();
+        for u in all {
+            if u.website_only {
+                result.skipped.push(u.name);
+                continue;
+            }
             match self.update(u.mod_id).await {
-                Ok(()) => ok.push(u.name),
-                Err(_) => failed.push(u.name),
+                Ok(()) => result.updated.push(u.name),
+                Err(_) => result.failed.push(u.name),
             }
         }
-        (ok, failed)
+        result
     }
 
     // ---- CurseForge installs ----
 
-    /// Installs the newest suitable file for a mod, plus its required dependencies.
-    pub async fn install_mod(&mut self, mod_id: i64) -> R<()> {
+    /// Installs the newest suitable file for a mod, plus its required dependencies. Returns
+    /// the required dependencies that have to be downloaded from the CurseForge website.
+    pub async fn install_mod(&mut self, mod_id: i64) -> R<Vec<WebsiteOnlyAddon>> {
         let api = self.api();
         let s = self.state.settings.clone();
         let mut queue = vec![mod_id];
         let mut seen = HashSet::new();
+        let mut website_only = vec![];
         let mut first = true;
         while let Some(id) = queue.pop() {
             if !seen.insert(id) {
                 continue;
             }
             let Some(m) = api.mods(&[id]).await?.into_iter().next() else { continue };
-            if m.allow_mod_distribution == Some(false) {
-                let msg = format!("{}'s author only allows downloads from CurseForge. Download the zip from its page and drop it on this window.", m.name);
-                if first { return Err(msg) } else { continue }
-            }
             // Prefer the chosen channel; if there is none (e.g. beta-only), take the newest file.
             let file = match api.best_file(&m, s.game_version_type_id, s.release_type).await? {
                 Some(f) => Some(f),
                 None => api.best_file(&m, s.game_version_type_id, 3).await?,
             };
+            if m.allow_mod_distribution == Some(false) || file.as_ref().is_some_and(|f| f.download_url.is_none()) {
+                if first {
+                    return Err(format!("{}'s author only allows downloads from CurseForge. Download the zip from its page and drop it on this window.", m.name));
+                }
+                website_only.push(WebsiteOnlyAddon { name: m.name.clone(), download_page: m.download_page(file.as_ref().map(|f| f.id)) });
+                continue;
+            }
             let Some(file) = file else {
                 if first { return Err(format!("No WoW Forever version of {} was found.", m.name)) } else { continue }
             };
@@ -335,7 +372,7 @@ impl Manager {
                 }
             }
         }
-        Ok(())
+        Ok(website_only)
     }
 
     async fn install_file(&mut self, m: Option<&CfMod>, file: &CfFile) -> R<()> {

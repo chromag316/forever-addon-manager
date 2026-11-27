@@ -143,9 +143,41 @@ pub struct CfMod {
     pub latest_files: Option<Vec<CfFile>>,
     pub latest_files_indexes: Option<Vec<CfFileIndex>>,
     pub allow_mod_distribution: Option<bool>,
+    /// Set by `annotate`: the author only allows downloads on the CurseForge website.
+    #[serde(default)]
+    pub website_only: bool,
+    /// Set by `annotate`: the file `best_index` picks for the chosen game version.
+    #[serde(default)]
+    pub target_file_id: Option<i64>,
 }
 
 impl CfMod {
+    /// Newest indexed file for this game version at or below the release type.
+    pub fn best_index(&self, gvt: i64, release_type: i64) -> Option<&CfFileIndex> {
+        self.latest_files_indexes.iter().flatten()
+            .filter(|i| i.game_version_type_id == Some(gvt) && i.release_type <= release_type)
+            .max_by_key(|i| i.file_id)
+    }
+
+    /// Fills `website_only` and `target_file_id` for the UI. Website-only when the author
+    /// turned off third-party downloads, or when the file CurseForge lists has no download URL.
+    pub fn annotate(&mut self, gvt: i64, release_type: i64) {
+        let idx = self.best_index(gvt, release_type).or_else(|| self.best_index(gvt, 3)).map(|i| i.file_id);
+        let no_url = idx.and_then(|id| self.latest_files.iter().flatten().find(|f| f.id == id))
+            .map(|f| f.download_url.is_none()).unwrap_or(false);
+        self.target_file_id = idx;
+        self.website_only = self.allow_mod_distribution == Some(false) || no_url;
+    }
+
+    /// CurseForge page that downloads this file (or the project page without a file).
+    pub fn download_page(&self, file_id: Option<i64>) -> Option<String> {
+        let base = self.website_url()?;
+        Some(match file_id {
+            Some(id) => format!("{}/download/{id}", base.trim_end_matches('/')),
+            None => base,
+        })
+    }
+
     pub fn website_url(&self) -> Option<String> {
         if let Some(u) = self.links.as_ref().and_then(|l| l.website_url.clone()) {
             return Some(u);
@@ -218,6 +250,36 @@ pub struct PendingUpdate {
     pub version_label: String,
     /// CurseForge author disabled third-party downloads.
     pub website_only: bool,
+    /// Where to download a website-only update by hand.
+    pub download_page: Option<String>,
+    /// Short commit ID when a Git update has no version of its own to show.
+    pub commit: Option<String>,
     #[serde(skip)]
     pub file: Option<CfFile>,
+}
+
+/// Result of an update check. A CurseForge failure doesn't hide Git/folder updates.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheck {
+    pub updates: Vec<PendingUpdate>,
+    pub error: Option<String>,
+}
+
+/// A required dependency that has to be downloaded from the CurseForge website.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WebsiteOnlyAddon {
+    pub name: String,
+    pub download_page: Option<String>,
+}
+
+/// Outcome of "Update all".
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAllResult {
+    pub updated: Vec<String>,
+    pub failed: Vec<String>,
+    /// Website-only updates that weren't installed.
+    pub skipped: Vec<String>,
 }

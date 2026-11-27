@@ -183,21 +183,45 @@ pub fn metadata(folder: &Path) -> (Option<String>, Option<String>, Option<String
     let Some(toc) = toc_files(folder).into_iter().next() else { return (None, None, None) };
     let Ok(bytes) = fs::read(toc) else { return (None, None, None) };
     let text = String::from_utf8_lossy(&bytes);
+    (toc_field(&text, "Title"), toc_field(&text, "Version"), toc_field(&text, "Author"))
+}
+
+/// A `## Key: value` line from a .toc file, without color codes. None when missing, empty or
+/// an unreplaced packager token like `@project-version@`.
+pub fn toc_field(text: &str, key: &str) -> Option<String> {
     let colors = Regex::new(r"\|c[0-9a-fA-F]{8}|\|r").unwrap();
-    let field = |key: &str| -> Option<String> {
-        for line in text.lines() {
-            let l = line.trim();
-            let Some(rest) = l.strip_prefix("##") else { continue };
-            let Some((k, v)) = rest.split_once(':') else { continue };
-            if k.trim().eq_ignore_ascii_case(key) {
-                let v = colors.replace_all(v.trim(), "").trim().to_string();
-                if v.is_empty() || (v.starts_with('@') && v.ends_with('@')) {
-                    return None; // empty or unreplaced packager token
-                }
-                return Some(v);
+    for line in text.lines() {
+        let l = line.trim().trim_start_matches('\u{FEFF}');
+        let Some(rest) = l.strip_prefix("##") else { continue };
+        let Some((k, v)) = rest.split_once(':') else { continue };
+        if k.trim().eq_ignore_ascii_case(key) {
+            let v = colors.replace_all(v.trim(), "").trim().to_string();
+            if v.is_empty() || (v.starts_with('@') && v.ends_with('@')) {
+                return None;
             }
+            return Some(v);
         }
-        None
-    };
-    (field("Title"), field("Version"), field("Author"))
+    }
+    None
+}
+
+/// `## Version` of a GitHub addon at a given commit, read from raw.githubusercontent.com
+/// (doesn't count against GitHub's API rate limit). Tries the usual .toc locations.
+pub async fn github_toc_version(http: &reqwest::Client, spec: &GitSpec, sha: &str, folder: &str) -> Option<String> {
+    let owner = spec.owner.as_ref()?;
+    let candidates = [
+        format!("{folder}.toc"),
+        format!("{folder}_Forever.toc"),
+        format!("{folder}-Forever.toc"),
+        format!("{folder}/{folder}.toc"),
+    ];
+    for path in candidates {
+        let url = format!("https://raw.githubusercontent.com/{owner}/{}/{sha}/{path}", spec.repo);
+        let Ok(resp) = http.get(url).timeout(super::curseforge::API_TIMEOUT).send().await else { return None };
+        if resp.status().is_success() {
+            let text = resp.text().await.ok()?;
+            return toc_field(&text, "Version");
+        }
+    }
+    None
 }

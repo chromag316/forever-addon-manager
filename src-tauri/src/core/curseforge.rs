@@ -118,10 +118,7 @@ impl Api {
 
     /// Newest file for this flavour at or below the allowed release type.
     pub async fn best_file(&self, m: &CfMod, gvt: i64, release_type: i64) -> Result<Option<CfFile>, String> {
-        let indexed = m.latest_files_indexes.iter().flatten()
-            .filter(|i| i.game_version_type_id == Some(gvt) && i.release_type <= release_type)
-            .max_by_key(|i| i.file_id);
-        if let Some(idx) = indexed {
+        if let Some(idx) = m.best_index(gvt, release_type) {
             if let Some(f) = m.latest_files.iter().flatten().find(|f| f.id == idx.file_id) {
                 return Ok(Some(f.clone()));
             }

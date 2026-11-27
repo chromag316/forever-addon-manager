@@ -18,8 +18,9 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
 - **Automatic updates** on start and every 4 hours (can be turned off), with a release / beta /
   alpha channel and per-addon "Turn Updates Off".
 - **Required dependencies** are installed too.
-- **Website-only addons**: some authors only allow downloads from CurseForge. Download the zip
-  from their page and drop it on the window; it's then tracked for updates.
+- **Website-only addons** are marked "CurseForge only". Their **Download…** button opens the right
+  file on CurseForge; drop the zip on the window (or use **Install from zip…**) and it's then
+  tracked for updates. See [the FAQ](#why-cant-some-addons-be-installed-directly).
 - Folders the app didn't install and can't identify are listed but never touched.
 
 <img alt="The Get Addons tab: popular WoW Forever addons from CurseForge with Install and Website buttons" src="docs/images/screenshot-get-addons-dark.png" width="900">
@@ -56,6 +57,25 @@ Newer versions, if any, are on the [latest release](https://github.com/chromag31
 Then open **Settings**, paste your free CurseForge API key from
 [console.curseforge.com](https://console.curseforge.com) and click **Save Key**. Check that the
 AddOns folder points at your WoW Forever installation; your addons are found automatically.
+
+## FAQ
+
+### Why can't some addons be installed directly?
+
+On CurseForge, each addon's author decides whether other apps may download their files through
+the CurseForge API. When an author turns this off, CurseForge gives apps no download link, so
+Forever AddOn Manager can't install or update that addon for you. Popular examples include
+Details!, DBM, Auctionator and Bagnon. The CurseForge website itself still offers the download.
+
+These addons show a **CurseForge only** label and a **Download…** button. Click it, let the zip
+download in your browser, then drag the zip onto the app window or click **Install from zip…**.
+The app recognises the addon and lets you know when a new version is out.
+
+### Why does a Git addon's update say "new commit"?
+
+Addons installed from a Git repository without GitHub releases are updated by commit. The app
+shows the new `## Version` from the addon's `.toc` file when it can read it, and the short
+commit ID when the version number hasn't changed.
 
 ## Where things are stored
 App data (`state.json` and the API key file, readable only by you):

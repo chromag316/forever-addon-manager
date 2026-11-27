@@ -65,7 +65,9 @@
       <div id="src-curseforge" class="source">
         <div class="field-row">
           <input id="cf-filter" type="search" placeholder="Search addons by name or Project ID" autocomplete="off">
+          <button id="cf-zip" class="btn" title="Install a zip you downloaded from CurseForge">Install from zip…</button>
         </div>
+        <p class="help">Addons marked <span class="badge">CurseForge only</span> can only be downloaded on the CurseForge website, by their author's choice. Download the zip there, then drag it onto this window or use Install from zip. The app still tracks and checks them for updates.</p>
         <ul id="cf-list" class="list"></ul>
         <!-- Scrolling near this footer loads the next batch automatically. -->
         <div class="list-footer" id="cf-sentinel"><span id="cf-note" class="muted"></span><button id="cf-retry" class="link" hidden>Retry</button></div>
@@ -122,7 +124,7 @@
         </label>
       </div>
       <label class="check"><input id="set-auto" type="checkbox">
-        <span>Install updates automatically<small>When the app opens and every 4 hours while it's open. Skips addons with updates turned off and website-only addons. WoW loads new versions after /reload.</small></span>
+        <span>Install updates automatically<small>When the app opens, after each check for updates, and every 4 hours while it's open. Skips addons with updates turned off and website-only addons. WoW loads new versions after /reload.</small></span>
       </label>
       <div class="dialog-actions">
         <span id="app-version" class="muted"></span>
