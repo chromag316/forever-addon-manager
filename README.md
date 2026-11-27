@@ -17,6 +17,8 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
   - **Folder**: copy a local addon folder (or a folder of addons) into AddOns.
 - **Automatic updates** on start and every 4 hours (can be turned off), with a release / beta /
   alpha channel and per-addon "Turn Updates Off".
+- **Tells you when a new version of the app is out**, with a link to the download (can be turned
+  off).
 - **Required dependencies** are installed too.
 - **Website-only addons** are marked "CurseForge only". Their **Download…** button opens the right
   file on CurseForge; drop the zip on the window (or use **Install from zip…**) and it's then
@@ -96,7 +98,9 @@ from a release tag are signed.
 **Privacy:** this program doesn't send any information to other networked systems unless you ask
 it to. It contacts the CurseForge API (with your own API key) and GitHub or the Git host you
 enter, to search for, install and update addons, including the automatic update check, which you
-can turn off in Settings.
+can turn off in Settings. It also checks this app's GitHub releases page for a newer version of
+Forever AddOn Manager (nothing is sent except a standard web request); you can turn that off in
+Settings too.
 
 Building from source or contributing: see [docs/development.md](docs/development.md).
 

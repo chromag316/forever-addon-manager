@@ -1,3 +1,4 @@
+pub mod app_update;
 pub mod curseforge;
 pub mod fingerprint;
 pub mod manager;

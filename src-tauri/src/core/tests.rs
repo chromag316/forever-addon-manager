@@ -152,3 +152,18 @@ fn toc_version_field() {
     assert_eq!(toc_field("## Version: @project-version@", "Version"), None);
     assert_eq!(toc_field("## Interface: 1", "Version"), None);
 }
+
+#[test]
+fn app_version_compare() {
+    use super::app_update::{is_newer, tag_from_location};
+    assert!(is_newer("1.1.0", "1.0.0"));
+    assert!(is_newer("v1.10.0", "1.9.2"));
+    assert!(is_newer("2", "1.9.9"));
+    assert!(is_newer("1.1.0", "1.1.0-beta"));
+    assert!(!is_newer("1.0.0", "1.0.0"));
+    assert!(!is_newer("1.1.0-beta", "1.1.0"));
+    assert!(!is_newer("0.9.0", "1.0.0"));
+    assert!(!is_newer("nightly", "1.0.0"));
+    assert_eq!(tag_from_location("https://github.com/chromag316/forever-addon-manager/releases/tag/v1.2.0").as_deref(), Some("v1.2.0"));
+    assert_eq!(tag_from_location("https://github.com/chromag316/forever-addon-manager/releases"), None);
+}

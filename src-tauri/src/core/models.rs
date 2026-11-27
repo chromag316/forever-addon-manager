@@ -67,6 +67,12 @@ pub struct Settings {
     /// Install updates automatically; on when never set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_update: Option<bool>,
+    /// Look for new versions of this app on GitHub; on when never set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check_app_update: Option<bool>,
+    /// App version whose "new version" banner the user dismissed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dismissed_app_version: Option<String>,
 }
 
 fn default_gvt() -> i64 {
@@ -83,6 +89,8 @@ impl Default for Settings {
             game_version_type_id: default_gvt(),
             release_type: default_release(),
             auto_update: None,
+            check_app_update: None,
+            dismissed_app_version: None,
         }
     }
 }
@@ -91,6 +99,17 @@ impl Settings {
     pub fn auto_updates(&self) -> bool {
         self.auto_update.unwrap_or(true)
     }
+    pub fn check_app_updates(&self) -> bool {
+        self.check_app_update.unwrap_or(true)
+    }
+}
+
+/// A newer release of this app on GitHub.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdate {
+    pub version: String,
+    pub url: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

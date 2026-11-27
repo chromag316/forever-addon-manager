@@ -12,6 +12,8 @@ let ov = null;                // overview from Rust: installed, untracked, setti
 let updates = new Map();      // modId -> { name, versionLabel, websiteOnly, downloadPage, commit }
 let lastCheck = 0;            // time of the last successful update check
 let lastAuto = null;          // { time, text } of the last automatic update, shown on Installed
+let appUpdate = null;         // { version, url } when a newer Forever AddOn Manager is out
+let lastAppCheck = 0;
 let busy = null;
 let error = null;
 let notice = null;            // string, or { text, buttons: [{ label, url } | { label, action }] }
@@ -91,6 +93,10 @@ function renderBanners() {
       <button data-url="https://console.curseforge.com/">Get a key</button><button data-action="settings">Open Settings…</button></div>`);
   }
   const close = (what) => `<button class="close" data-dismiss="${what}" title="Dismiss" aria-label="Dismiss">${icon("i-close")}</button>`;
+  if (appUpdate) {
+    parts.push(`<div class="banner info" role="status">${icon("i-download")}<span class="text">Forever AddOn Manager ${esc(appUpdate.version)} is available (you have ${esc(ov.appVersion)}).</span>
+      <button data-url="${esc(appUpdate.url)}">Download</button>${close("app-update")}</div>`);
+  }
   // Key problems get a direct way to fix them.
   const keyIssue = error && /API key/.test(error) ? `<button data-action="settings">Open Settings</button>` : "";
   if (error) parts.push(`<div class="banner warning" role="alert">${icon("i-warning")}<span class="text">${esc(error)}</span>${keyIssue}${close("error")}</div>`);
@@ -297,8 +303,20 @@ async function checkUpdates() {
 
 // Runs a check when the last one is older than the interval (timer, window focus, wake).
 async function checkIfDue() {
+  if (ov && ov.checkAppUpdates && Date.now() - lastAppCheck >= AUTO_INTERVAL_MS) checkAppUpdate();
   if (!ov || !ov.autoUpdates || busy || Date.now() - lastCheck < AUTO_INTERVAL_MS) return;
   await checkUpdates();
+}
+
+// New version of this app on GitHub. Quiet on failure: it's only a hint.
+async function checkAppUpdate() {
+  lastAppCheck = Date.now();
+  try {
+    appUpdate = await invoke("app_update");
+  } catch {
+    return;
+  }
+  render();
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -323,6 +341,7 @@ async function autoUpdate() {
 
 async function startup() {
   await refresh();
+  if (ov.checkAppUpdates) checkAppUpdate(); // runs alongside the addon checks
   if (ov.hasKey && !ov.installed.length) await scan();
   else await checkUpdates();
 }
@@ -430,6 +449,7 @@ async function openSettings() {
   $("#set-path").value = s.addonsPath;
   $("#set-release").value = String(s.releaseType);
   $("#set-auto").checked = ov.autoUpdates;
+  $("#set-app-update").checked = ov.checkAppUpdates;
   $("#app-version").textContent = `Version ${ov.appVersion}`;
   $("#settings").showModal();
   if (ov.hasKey && $("#set-gvt").options.length < 2) {
@@ -448,9 +468,13 @@ async function saveSettings() {
     releaseType: Number($("#set-release").value),
     gameVersionTypeId: Number($("#set-gvt").value),
     autoUpdates: $("#set-auto").checked,
+    checkAppUpdates: $("#set-app-update").checked,
   } });
   await refresh();
+  if (!ov.checkAppUpdates) appUpdate = null;
+  else if (!lastAppCheck) checkAppUpdate();
   if (!wasAuto && ov.autoUpdates) await checkUpdates();
+  render();
 }
 
 // ---------- events ----------
@@ -468,7 +492,18 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (t.dataset.source) { source = t.dataset.source; render(); fillIfNeeded(); return; }
-  if (t.dataset.dismiss) { if (t.dataset.dismiss === "error") error = null; else notice = null; render(); return; }
+  if (t.dataset.dismiss) {
+    const what = t.dataset.dismiss;
+    if (what === "error") error = null;
+    else if (what === "app-update") {
+      // Hidden until the next version comes out.
+      const version = appUpdate && appUpdate.version;
+      appUpdate = null;
+      if (version) invoke("dismiss_app_update", { version }).catch(() => {});
+    } else notice = null;
+    render();
+    return;
+  }
   const id = Number(t.dataset.id);
   switch (t.dataset.action) {
     case "settings": openSettings(); break;
@@ -578,7 +613,7 @@ $("#set-path-choose").onclick = async () => {
   const dir = await T.dialog.open({ directory: true, defaultPath: $("#set-path").value, title: "Choose the Interface/AddOns folder" });
   if (dir) { $("#set-path").value = dir; saveSettings(); }
 };
-for (const id of ["#set-path", "#set-release", "#set-gvt", "#set-auto"]) $(id).addEventListener("change", saveSettings);
+for (const id of ["#set-path", "#set-release", "#set-gvt", "#set-auto", "#set-app-update"]) $(id).addEventListener("change", saveSettings);
 
 // Drag and drop zips (for addons whose authors only allow downloads from CurseForge).
 if (T) {

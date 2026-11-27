@@ -146,7 +146,11 @@ window.__mock = async (cmd, args) => {
     settings: { addonsPath: "/Applications/World of Warcraft/_forever_/Interface/AddOns", gameVersionTypeId: 88568, releaseType: 1 },
   };
   switch (cmd) {
-    case "overview": return { ...s, autoUpdates: true, hasKey: true, addonsPathExists: true, appVersion: "0.1.0" };
+    case "overview": return { ...s, autoUpdates: true, checkAppUpdates: s.checkAppUpdates ?? true, hasKey: true, addonsPathExists: true, appVersion: "1.0.0" };
+    case "app_update": return s.checkAppUpdates === false || s.dismissedApp === "1.1.0" ? null
+      : { version: "1.1.0", url: "https://github.com/chromag316/forever-addon-manager/releases/tag/v1.1.0" };
+    case "dismiss_app_update": s.dismissedApp = args.version; return null;
+    case "save_settings": s.checkAppUpdates = args.settings.checkAppUpdates; return null;
     case "check_updates": return { updates: [
       { modId: 1700375, name: "Spoken", versionLabel: "Spoken 3.11.0", websiteOnly: false },
       { modId: 1697760, name: "EZFishing", versionLabel: "v1.1.3", websiteOnly: true, downloadPage: "https://www.curseforge.com/wow/addons/ezfishing/download/1" },
