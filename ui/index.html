@@ -73,22 +73,22 @@
       </div>
 
       <div id="src-git" class="source" hidden>
+        <p class="help intro">Installs the latest GitHub release if there is one, otherwise the default branch. Add /tree/&lt;branch&gt; to the URL to follow a branch. Other Git hosts are cloned.</p>
         <div class="field-row">
           <input id="git-url" type="text" placeholder="https://github.com/user/addon" autocomplete="off" spellcheck="false">
           <button id="git-install" class="btn primary">Install</button>
         </div>
-        <p class="help">Installs the latest GitHub release if there is one, otherwise the default branch. Add /tree/&lt;branch&gt; to the URL to follow a branch. Other Git hosts are cloned.</p>
         <ul id="git-list" class="list"></ul>
       </div>
 
       <div id="src-folder" class="source" hidden>
+        <p class="help intro">Installs an addon from a zip (for example one downloaded from CurseForge) or copies an addon folder into AddOns. You can also drag zips onto this window. Zips CurseForge recognises are tracked as CurseForge addons and checked for updates; everything else can be reinstalled from its file on the Installed tab.</p>
         <div class="field-row">
           <input id="folder-path" type="text" placeholder="Choose an addon zip or folder…" autocomplete="off" spellcheck="false">
           <button id="file-choose-zip" class="btn" title="Choose a zip file">Zip…</button>
           <button id="folder-choose" class="btn" title="Choose a folder">Folder…</button>
           <button id="folder-install" class="btn primary">Install</button>
         </div>
-        <p class="help">Installs an addon from a zip (for example one downloaded from CurseForge) or copies an addon folder into AddOns. You can also drag zips onto this window. Zips CurseForge recognises are tracked as CurseForge addons and checked for updates; everything else can be reinstalled from its file on the Installed tab.</p>
         <ul id="folder-list" class="list"></ul>
       </div>
     </section>
