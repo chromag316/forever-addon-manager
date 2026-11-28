@@ -1,6 +1,6 @@
 pkgbase = forever-addon-manager-bin
 	pkgdesc = Small, fast addon manager for WoW Forever (CurseForge, Git and local folders)
-	pkgver = 1.0.0
+	pkgver = 1.1.0
 	pkgrel = 1
 	url = https://github.com/chromag316/forever-addon-manager
 	arch = x86_64
@@ -13,9 +13,9 @@ pkgbase = forever-addon-manager-bin
 	conflicts = forever-addon-manager
 	options = !strip
 	options = !debug
-	source = LICENSE-1.0.0::https://raw.githubusercontent.com/chromag316/forever-addon-manager/v1.0.0/LICENSE
+	source = LICENSE-1.1.0::https://raw.githubusercontent.com/chromag316/forever-addon-manager/v1.1.0/LICENSE
 	sha256sums = 6e15f1c4af1971f236df237c60332221221338d5263cf6600e3354041dc25422
-	source_x86_64 = forever-addon-manager-1.0.0.deb::https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-amd64.deb
-	sha256sums_x86_64 = 45dc35f7a2c4fa4f13aed00c8ccdd8a0aacdc313dde87cc45b98967129524231
+	source_x86_64 = forever-addon-manager-1.1.0.deb::https://github.com/chromag316/forever-addon-manager/releases/download/v1.1.0/Forever-AddOn-Manager-1.1.0-Linux-amd64.deb
+	sha256sums_x86_64 = 702b44ab6219ea88db0bddc38bcc44b8e8a41e0ed1bd740041ae71b7a49a334b
 
 pkgname = forever-addon-manager-bin
