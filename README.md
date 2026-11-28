@@ -28,16 +28,16 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
 
 <img alt="The Get Addons tab: popular WoW Forever addons from CurseForge with Install and Website buttons" src="docs/images/screenshot-get-addons-dark.png" width="900">
 
-## Download (v1.0.0)
+## Download (v1.1.0)
 | System | Download |
 |---|---|
-| macOS 11+ (Intel and Apple Silicon) | [Forever-AddOn-Manager-1.0.0-macOS.dmg](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-macOS.dmg) |
-| Windows 10/11 | [Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Windows-x64-setup.exe) |
-| Debian / Ubuntu | [Forever-AddOn-Manager-1.0.0-Linux-amd64.deb](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-amd64.deb) |
-| Fedora / openSUSE | [Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm](https://github.com/chromag316/forever-addon-manager/releases/download/v1.0.0/Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm) |
+| macOS 11+ (Intel and Apple Silicon) | [Forever-AddOn-Manager-1.1.0-macOS.dmg](https://github.com/chromag316/forever-addon-manager/releases/download/v1.1.0/Forever-AddOn-Manager-1.1.0-macOS.dmg) |
+| Windows 10/11 | [Forever-AddOn-Manager-1.1.0-Windows-x64-setup.exe](https://github.com/chromag316/forever-addon-manager/releases/download/v1.1.0/Forever-AddOn-Manager-1.1.0-Windows-x64-setup.exe) |
+| Debian / Ubuntu | [Forever-AddOn-Manager-1.1.0-Linux-amd64.deb](https://github.com/chromag316/forever-addon-manager/releases/download/v1.1.0/Forever-AddOn-Manager-1.1.0-Linux-amd64.deb) |
+| Fedora / openSUSE | [Forever-AddOn-Manager-1.1.0-Linux-x86_64.rpm](https://github.com/chromag316/forever-addon-manager/releases/download/v1.1.0/Forever-AddOn-Manager-1.1.0-Linux-x86_64.rpm) |
 | Arch Linux | Build the package from [packaging/aur](packaging/aur) (see below) |
 
-Release notes and all files: [v1.0.0](https://github.com/chromag316/forever-addon-manager/releases/tag/v1.0.0).
+Release notes and all files: [v1.1.0](https://github.com/chromag316/forever-addon-manager/releases/tag/v1.1.0).
 Newer versions, if any, are on the [latest release](https://github.com/chromag316/forever-addon-manager/releases/latest) page.
 
 **First start**
@@ -45,8 +45,8 @@ Newer versions, if any, are on the [latest release](https://github.com/chromag31
   first time right-click it and choose **Open**.
 - **Windows:** run the installer. If SmartScreen shows "Windows protected your PC" (it can for
   new releases until enough people have downloaded them), choose **More info → Run anyway**.
-- **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.0.0-Linux-amd64.deb`
-- **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.0.0-Linux-x86_64.rpm`
+- **Debian / Ubuntu:** `sudo apt install ./Forever-AddOn-Manager-1.1.0-Linux-amd64.deb`
+- **Fedora / openSUSE:** `sudo dnf install ./Forever-AddOn-Manager-1.1.0-Linux-x86_64.rpm`
   (openSUSE: `sudo zypper install …`)
 - **Arch Linux:** the package isn't on the AUR yet. Build and install it from this repository:
   ```bash
