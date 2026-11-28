@@ -167,3 +167,27 @@ fn app_version_compare() {
     assert_eq!(tag_from_location("https://github.com/chromag316/forever-addon-manager/releases/tag/v1.2.0").as_deref(), Some("v1.2.0"));
     assert_eq!(tag_from_location("https://github.com/chromag316/forever-addon-manager/releases"), None);
 }
+
+/// Without a CurseForge key (or for an addon CurseForge doesn't know), a zip install is
+/// tracked as a local addon that can be reinstalled from the same zip.
+#[tokio::test]
+async fn zip_install_is_tracked_locally() {
+    if std::env::var("CURSEFORGE_API_KEY").is_ok_and(|k| !k.is_empty()) {
+        return; // this test is about the no-key path
+    }
+    let root = std::env::temp_dir().join(format!("fam-zip-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let mut m = super::manager::Manager::at(&root);
+    m.install_zip(FIXTURE).await.expect("install");
+    m.install_zip(FIXTURE).await.expect("install again");
+    assert_eq!(m.state.installed.len(), 1, "installing the same addon again replaces it");
+    let a = &m.state.installed[0];
+    assert_eq!(a.kind(), super::models::AddonSource::Folder);
+    assert_eq!(a.source_url.as_deref(), Some(FIXTURE));
+    assert_eq!(a.folders, vec!["TestAddon".to_string()]);
+    assert!(root.join("AddOns/TestAddon/TestAddon.toc").is_file());
+    m.reinstall(a.mod_id).await.expect("reinstall from zip");
+    assert!(m.untracked().is_empty());
+    assert!(m.install_zip(&root.join("missing.zip").to_string_lossy()).await.unwrap_err().contains("doesn't exist"));
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -6,7 +6,7 @@ const invoke = (cmd, args) => (T ? T.core.invoke(cmd, args) : window.__mock(cmd,
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const AUTO_INTERVAL_MS = 4 * 60 * 60 * 1000;
-const WEBSITE_ONLY_TIP = "This addon's author only allows downloads on the CurseForge website. Download the zip there, then drag it onto this window or use Install from zip.";
+const WEBSITE_ONLY_TIP = "This addon's author only allows downloads on the CurseForge website. Download the zip there, then drag it onto this window or install it on the From file tab.";
 
 let ov = null;                // overview from Rust: installed, untracked, settings, …
 let updates = new Map();      // modId -> { name, versionLabel, websiteOnly, downloadPage, commit }
@@ -59,6 +59,7 @@ const sep = () => (ov.settings.addonsPath.includes("\\") ? "\\" : "/");
 const addonPath = (folder) => ov.settings.addonsPath.replace(/[\\/]+$/, "") + sep() + folder;
 const reveal = (path) => T && T.opener.revealItemInDir(path);
 const isInstalled = (id) => ov.installed.some((a) => a.modId === id);
+const isZip = (path) => /\.zip$/i.test(String(path || "").trim());
 const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
 
 function icon(id) {
@@ -146,7 +147,7 @@ function renderInstalled() {
       ${ov.addonsPathExists ? "" : `<p style="margin-top:10px">This folder doesn't exist. <button class="link" data-action="settings">Choose your AddOns folder…</button></p>`}</div>`;
     return;
   }
-  const groups = [["curseforge", "CurseForge"], ["git", "Git"], ["folder", "Folder"]];
+  const groups = [["curseforge", "CurseForge"], ["git", "Git"], ["folder", "From file"]];
   let html = "";
   for (const [kind, label] of groups) {
     const items = ov.installed.filter((a) => a.kind === kind);
@@ -355,14 +356,15 @@ function startDownload(url, name) {
 }
 
 async function installZips(paths) {
-  if (!paths.length || busy) return;
+  if (!paths.length || busy) return false;
   tab = "installed";
   notice = null;
-  await run(`Installing ${paths.length === 1 ? "from zip" : `${paths.length} zips`}…`, async () => {
+  const ok = await run(`Installing ${paths.length === 1 ? "from zip" : `${paths.length} zips`}…`, async () => {
     await invoke("install_zips", { paths });
     await loadUpdates();
   });
   await autoUpdate();
+  return ok;
 }
 
 async function chooseZips() {
@@ -424,8 +426,9 @@ function showMenu(button, items) {
 function addonMenu(button, a) {
   const items = [];
   if (a.websiteUrl) items.push({ label: a.kind === "git" ? "Open Repository" : "Open on CurseForge", run: () => openUrl(a.websiteUrl) });
-  if (a.kind !== "curseforge") items.push({ label: a.kind === "git" ? "Reinstall from Git" : "Reinstall from Folder", run: () => run(`Reinstalling ${a.name}…`, () => invoke("reinstall", { modId: a.modId }).then(() => updates.delete(a.modId))) });
-  if (a.kind === "folder" && a.sourceURL) items.push({ label: "Show Source Folder", run: () => reveal(a.sourceURL) });
+  const fromZip = a.kind === "folder" && isZip(a.sourceURL);
+  if (a.kind !== "curseforge") items.push({ label: a.kind === "git" ? "Reinstall from Git" : fromZip ? "Reinstall from Zip" : "Reinstall from Folder", run: () => run(`Reinstalling ${a.name}…`, () => invoke("reinstall", { modId: a.modId }).then(() => updates.delete(a.modId))) });
+  if (a.kind === "folder" && a.sourceURL) items.push({ label: fromZip ? "Show Zip" : "Show Source Folder", run: () => reveal(a.sourceURL) });
   if (a.folders.length) items.push({ label: "Show in Folder", run: () => reveal(addonPath(a.folders[0])) });
   items.push({ label: a.ignored ? "Turn Updates On" : "Turn Updates Off", run: async () => {
     await invoke("set_ignored", { modId: a.modId, ignored: !a.ignored });
@@ -538,7 +541,6 @@ $("#btn-scan").onclick = scan;
 $("#btn-update-all").onclick = () => updateAll(false);
 $("#btn-settings").onclick = openSettings;
 $("#cf-retry").onclick = () => { catalogFailed = false; loadMore(1); };
-$("#cf-zip").onclick = chooseZips;
 $("main").addEventListener("scroll", fillIfNeeded, { passive: true });
 window.addEventListener("resize", fillIfNeeded);
 
@@ -565,14 +567,22 @@ $("#git-url").addEventListener("input", render);
 $("#git-url").addEventListener("keydown", (e) => e.key === "Enter" && installGit());
 $("#git-install").onclick = installGit;
 
+// From file: a zip goes through the zip install (CurseForge match + update check), a folder is copied.
 const installFolder = async () => {
   const path = $("#folder-path").value.trim();
-  if (path && (await run("Copying folder…", () => invoke("install_folder", { path })))) $("#folder-path").value = "";
+  if (!path) return;
+  const ok = isZip(path) ? await installZips([path]) : await run("Copying folder…", () => invoke("install_folder", { path }));
+  if (ok) $("#folder-path").value = "";
   render();
 };
 $("#folder-path").addEventListener("input", render);
 $("#folder-path").addEventListener("keydown", (e) => e.key === "Enter" && installFolder());
 $("#folder-install").onclick = installFolder;
+$("#file-choose-zip").onclick = async () => {
+  if (!T) return;
+  const zip = await T.dialog.open({ title: "Choose an addon zip", filters: [{ name: "Addon zip", extensions: ["zip"] }] });
+  if (zip) { $("#folder-path").value = zip; render(); }
+};
 $("#folder-choose").onclick = async () => {
   if (!T) return;
   const dir = await T.dialog.open({ directory: true, title: "Choose an addon folder (it contains a .toc file)" });

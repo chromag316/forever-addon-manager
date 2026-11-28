@@ -82,6 +82,10 @@ async fn install_git(m: Shared<'_>, url: String) -> R<()> {
 
 #[tauri::command]
 async fn install_folder(m: Shared<'_>, path: String) -> R<()> {
+    // The "From file" tab takes either an addon folder or a zip.
+    if path.trim().to_lowercase().ends_with(".zip") {
+        return m.lock().await.install_zip(&path).await;
+    }
     m.lock().await.install_folder(&path)
 }
 

@@ -52,6 +52,10 @@ pub(crate) fn local_id(key: &str) -> i64 {
     -((fingerprint::murmur2(key.to_lowercase().as_bytes(), false) & 0x7fff_ffff) as i64) - 1
 }
 
+fn is_zip(path: &str) -> bool {
+    path.trim().to_lowercase().ends_with(".zip")
+}
+
 fn short_ref(r: &str) -> String {
     if r.len() == 40 { r[..7].to_string() } else { r.to_string() }
 }
@@ -63,6 +67,16 @@ impl Manager {
         let state = fs::read(dir.join("state.json")).ok()
             .and_then(|d| serde_json::from_slice::<AppState>(&d).ok())
             .unwrap_or_default();
+        Manager { state, dir, http: curseforge::http_client(), pending: HashMap::new() }
+    }
+
+    /// A manager with its data and AddOns folders in `root`, for tests.
+    #[cfg(test)]
+    pub fn at(root: &Path) -> Self {
+        let dir = root.join("data");
+        let _ = fs::create_dir_all(&dir);
+        let mut state = AppState::default();
+        state.settings.addons_path = root.join("AddOns").to_string_lossy().to_string();
         Manager { state, dir, http: curseforge::http_client(), pending: HashMap::new() }
     }
 
@@ -484,23 +498,40 @@ impl Manager {
         Ok(())
     }
 
-    /// Installs a zip the user downloaded themselves, then re-scans so it's tracked.
+    /// Installs a zip the user downloaded themselves. If CurseForge recognises it, it's tracked
+    /// as a CurseForge addon (with update checks); otherwise as a local addon from this zip.
     pub async fn install_zip(&mut self, zip: &str) -> R<()> {
+        let zip = zip.trim();
+        if !Path::new(zip).is_file() {
+            return Err(format!("{zip} doesn't exist any more. Download the zip again and drop it on this window."));
+        }
         let staging = temp_path("fam-zip");
         let (z, st) = (PathBuf::from(zip), staging.clone());
         let res = tokio::task::spawn_blocking(move || sources::unzip(&z, &st)).await.map_err(|e| e.to_string());
-        let outcome = (|| {
-            res??;
-            let found = sources::addon_folders(&staging, 0);
-            if found.is_empty() {
-                return Err("The zip contains no WoW addon.".to_string());
+        let found = res.and_then(|r| r).map(|_| sources::addon_folders(&staging, 0));
+        let outcome = match found {
+            Ok(found) if found.is_empty() => Err("The zip contains no WoW addon.".to_string()),
+            Ok(found) => {
+                // One id per addon (by its main folder), so a newer zip replaces the older one.
+                let id = local_id(&format!("zip:{}", found[0].1));
+                // Forget an earlier local install of these folders so the scan can match them.
+                self.state.installed.retain(|a| a.mod_id != id);
+                self.place(&found, false, id).map(|names| (id, names))
             }
-            self.place(&found, false, 0)
-        })();
+            Err(e) => Err(e),
+        };
         let _ = fs::remove_dir_all(&staging);
-        outcome?;
+        let (id, names) = outcome?;
         if !self.api_key().is_empty() {
             self.scan().await?;
+        }
+        let claimed = self.state.installed.iter().any(|a| a.folders.iter().any(|f| f.eq_ignore_ascii_case(&names[0])));
+        if !claimed {
+            let meta = sources::metadata(&self.addons_dir().join(&names[0]));
+            let mut rec = self.local_record(id, &names, &meta, &names[0]);
+            rec.source = Some(AddonSource::Folder);
+            rec.source_url = Some(zip.to_string());
+            self.store(rec);
         }
         Ok(())
     }
@@ -509,6 +540,7 @@ impl Manager {
         let Some(a) = self.state.installed.iter().find(|a| a.mod_id == mod_id).cloned() else { return Ok(()) };
         match (a.kind(), a.source_url) {
             (AddonSource::Git, Some(src)) => self.install_git(&src).await,
+            (AddonSource::Folder, Some(src)) if is_zip(&src) => self.install_zip(&src).await,
             (AddonSource::Folder, Some(src)) => self.install_folder(&src),
             _ => Ok(()),
         }

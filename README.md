@@ -14,15 +14,16 @@ built on the official CurseForge API. About 6 MB instead of the 643 MB CurseForg
   - **Git**: paste a URL (`https://github.com/user/addon` or `user/addon`). Installs the latest
     GitHub release if there is one, otherwise the default branch; add `/tree/<branch>` to follow
     a branch. Needs `git` installed.
-  - **Folder**: copy a local addon folder (or a folder of addons) into AddOns.
+  - **From file**: install a downloaded zip, or copy a local addon folder (or a folder of addons)
+    into AddOns. Zips CurseForge recognises are tracked as CurseForge addons with update checks.
 - **Automatic updates** on start and every 4 hours (can be turned off), with a release / beta /
   alpha channel and per-addon "Turn Updates Off".
 - **Tells you when a new version of the app is out**, with a link to the download (can be turned
   off).
 - **Required dependencies** are installed too.
 - **Website-only addons** are marked "CurseForge only". Their **Download…** button opens the right
-  file on CurseForge; drop the zip on the window (or use **Install from zip…**) and it's then
-  tracked for updates. See [the FAQ](#why-cant-some-addons-be-installed-directly).
+  file on CurseForge; drop the zip on the window (or install it on the **From file** tab) and
+  it's then tracked for updates. See [the FAQ](#why-cant-some-addons-be-installed-directly).
 - Folders the app didn't install and can't identify are listed but never touched.
 
 <img alt="The Get Addons tab: popular WoW Forever addons from CurseForge with Install and Website buttons" src="docs/images/screenshot-get-addons-dark.png" width="900">
@@ -70,7 +71,8 @@ Forever AddOn Manager can't install or update that addon for you. Popular exampl
 Details!, DBM, Auctionator and Bagnon. The CurseForge website itself still offers the download.
 
 These addons show a **CurseForge only** label and a **Download…** button. Click it, let the zip
-download in your browser, then drag the zip onto the app window or click **Install from zip…**.
+download in your browser, then drag the zip onto the app window or install it on the
+**Get Addons → From file** tab.
 The app recognises the addon and lets you know when a new version is out.
 
 ### Why does a Git addon's update say "new commit"?
