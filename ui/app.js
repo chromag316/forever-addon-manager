@@ -6,12 +6,17 @@ const invoke = (cmd, args) => (T ? T.core.invoke(cmd, args) : window.__mock(cmd,
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const AUTO_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const WEBSITE_ONLY_TIP = "This addon's author only allows downloads on the CurseForge website. Download the zip there, then drag it onto this window or install it on the From file tab.";
 
 let ov = null;                // overview from Rust: installed, untracked, settings, …
-let updates = new Map();      // modId -> { name, versionLabel, websiteOnly }
+let updates = new Map();      // modId -> { name, versionLabel, websiteOnly, downloadPage, commit }
+let lastCheck = 0;            // time of the last successful update check
+let lastAuto = null;          // { time, text } of the last automatic update, shown on Installed
+let appUpdate = null;         // { version, url } when a newer Forever AddOn Manager is out
+let lastAppCheck = 0;
 let busy = null;
 let error = null;
-let notice = null;
+let notice = null;            // string, or { text, buttons: [{ label, url } | { label, action }] }
 let tab = "installed";
 let source = "curseforge";
 let catalog = [];
@@ -54,6 +59,7 @@ const sep = () => (ov.settings.addonsPath.includes("\\") ? "\\" : "/");
 const addonPath = (folder) => ov.settings.addonsPath.replace(/[\\/]+$/, "") + sep() + folder;
 const reveal = (path) => T && T.opener.revealItemInDir(path);
 const isInstalled = (id) => ov.installed.some((a) => a.modId === id);
+const isZip = (path) => /\.zip$/i.test(String(path || "").trim());
 const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
 
 function icon(id) {
@@ -73,7 +79,8 @@ function render() {
 function renderToolbar() {
   $("#busy").hidden = !busy;
   $("#busy-text").textContent = busy || "";
-  $("#btn-scan").disabled = !!busy || !ov.hasKey;
+  $("#btn-scan").disabled = !!busy;
+  $("#btn-scan").title = ov.hasKey ? "Re-scan the AddOns folder and check for updates" : "Check Git addons for updates";
   $("#btn-update-all").disabled = !!busy || ![...updates.values()].some((u) => !u.websiteOnly);
   document.querySelectorAll(".toolbar .segmented button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   $("#view-installed").hidden = tab !== "installed";
@@ -87,10 +94,20 @@ function renderBanners() {
       <button data-url="https://console.curseforge.com/">Get a key</button><button data-action="settings">Open Settings…</button></div>`);
   }
   const close = (what) => `<button class="close" data-dismiss="${what}" title="Dismiss" aria-label="Dismiss">${icon("i-close")}</button>`;
+  if (appUpdate) {
+    parts.push(`<div class="banner info" role="status">${icon("i-download")}<span class="text">Forever AddOn Manager ${esc(appUpdate.version)} is available (you have ${esc(ov.appVersion)}).</span>
+      <button data-url="${esc(appUpdate.url)}">Download</button>${close("app-update")}</div>`);
+  }
   // Key problems get a direct way to fix them.
   const keyIssue = error && /API key/.test(error) ? `<button data-action="settings">Open Settings</button>` : "";
   if (error) parts.push(`<div class="banner warning" role="alert">${icon("i-warning")}<span class="text">${esc(error)}</span>${keyIssue}${close("error")}</div>`);
-  if (notice) parts.push(`<div class="banner notice" role="status">${icon("i-info")}<span class="text">${esc(notice)}</span>${close("notice")}</div>`);
+  if (notice) {
+    const n = typeof notice === "string" ? { text: notice, buttons: [] } : notice;
+    const buttons = (n.buttons || []).map((b) => b.url
+      ? `<button data-url="${esc(b.url)}">${esc(b.label)}</button>`
+      : `<button data-action="${esc(b.action)}">${esc(b.label)}</button>`).join("");
+    parts.push(`<div class="banner notice" role="status">${icon("i-info")}<span class="text">${esc(n.text)}</span>${buttons}${close("notice")}</div>`);
+  }
   $("#banners").innerHTML = parts.join("");
 }
 
@@ -110,7 +127,8 @@ function addonRow(a) {
   const u = updates.get(a.modId);
   let status;
   if (a.ignored) status = `<span class="muted">Updates off</span>`;
-  else if (u && u.websiteOnly) status = `<button class="btn small" data-action="website" data-id="${a.modId}" title="This author only allows downloads from CurseForge. Download the zip, then drop it on this window.">${esc(u.versionLabel)} on website</button>`;
+  else if (u && u.websiteOnly) status = `<button class="btn small" data-action="download" data-url="${esc(u.downloadPage || a.websiteUrl || "")}" data-name="${esc(a.name)}" title="${esc(WEBSITE_ONLY_TIP)}">Download ${esc(u.versionLabel)}…</button>`;
+  else if (u && u.commit) status = `<button class="btn small primary" data-action="update" data-id="${a.modId}" title="The repository has a new commit (${esc(u.commit)}) but no new version number." ${busy ? "disabled" : ""}>Update (new commit ${esc(u.commit)})</button>`;
   else if (u) status = `<button class="btn small primary" data-action="update" data-id="${a.modId}" ${busy ? "disabled" : ""}>Update to ${esc(u.versionLabel)}</button>`;
   else status = `<span class="ok" title="Up to date">${icon("i-check")}</span>`;
   return `<li class="row">${thumb(a)}
@@ -129,7 +147,7 @@ function renderInstalled() {
       ${ov.addonsPathExists ? "" : `<p style="margin-top:10px">This folder doesn't exist. <button class="link" data-action="settings">Choose your AddOns folder…</button></p>`}</div>`;
     return;
   }
-  const groups = [["curseforge", "CurseForge"], ["git", "Git"], ["folder", "Folder"]];
+  const groups = [["curseforge", "CurseForge"], ["git", "Git"], ["folder", "From file"]];
   let html = "";
   for (const [kind, label] of groups) {
     const items = ov.installed.filter((a) => a.kind === kind);
@@ -141,6 +159,7 @@ function renderInstalled() {
       <span class="muted">not managed</span>
       <button class="icon-btn" data-action="menu-folder" data-folder="${esc(f)}" title="More">${icon("i-dots")}</button></li>`).join("")}</ul>`;
   }
+  html += `<p class="list-status muted">${esc(checkStatus())}</p>`;
   el.innerHTML = html;
 }
 
@@ -206,15 +225,30 @@ async function saveWelcomeKey() {
 function catalogRow(m) {
   let action;
   if (isInstalled(m.id)) action = `<span class="muted">Installed</span>`;
-  else if (m.allowModDistribution === false) action = `<button class="btn small" data-action="open" data-url="${esc(websiteOf(m))}" title="This author only allows downloads from CurseForge. Download the zip, then drop it on this window.">Website</button>`;
+  else if (m.websiteOnly) action = `<button class="btn small" data-action="download" data-url="${esc(downloadPageOf(m))}" data-name="${esc(m.name)}" title="${esc(WEBSITE_ONLY_TIP)}">Download…</button>`;
   else action = `<button class="btn small" data-action="install" data-id="${m.id}" ${busy ? "disabled" : ""}>Install</button>`;
   const logo = m.logo && m.logo.thumbnailUrl ? `<img class="thumb" src="${esc(m.logo.thumbnailUrl)}" alt="">` : `<div class="thumb">${icon("i-piece-line")}</div>`;
-  return `<li class="row">${logo}<div class="info"><div class="name">${esc(m.name)}</div><div class="sub summary">${esc(m.summary)}</div></div>
+  const badge = m.websiteOnly && !isInstalled(m.id) ? `<span class="badge" title="${esc(WEBSITE_ONLY_TIP)}">CurseForge only</span>` : "";
+  return `<li class="row">${logo}<div class="info"><div class="name">${esc(m.name)}${badge}</div><div class="sub summary">${esc(m.summary)}</div></div>
     ${m.downloadCount ? `<span class="count">${compact.format(m.downloadCount)}</span>` : ""}${action}</li>`;
 }
 
 function websiteOf(m) {
   return (m.links && m.links.websiteUrl) || (m.slug ? `https://www.curseforge.com/wow/addons/${m.slug}` : "");
+}
+
+// The CurseForge page that downloads the file for the chosen game version.
+function downloadPageOf(m) {
+  const base = websiteOf(m).replace(/\/+$/, "");
+  return base && m.targetFileId ? `${base}/download/${m.targetFileId}` : base;
+}
+
+function checkStatus() {
+  if (!lastCheck) return "";
+  const at = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const parts = [`Checked for updates at ${at(lastCheck)}.`];
+  if (lastAuto) parts.push(`${lastAuto.text} (${at(lastAuto.time)}).`);
+  return parts.join(" ");
 }
 
 function renderBrowse() {
@@ -246,28 +280,58 @@ function renderBrowse() {
 
 // ---------- actions ----------
 
+// Refresh button: re-scan (needs a CurseForge key), check for updates, then install them
+// if automatic updates are on.
 async function scan() {
-  await run("Scanning AddOns…", async () => {
-    await invoke("scan");
+  await run(ov.hasKey ? "Scanning AddOns…" : "Checking for updates…", async () => {
+    if (ov.hasKey) await invoke("scan");
     await loadUpdates();
   });
+  await autoUpdate();
 }
 
 async function loadUpdates() {
-  const list = await invoke("check_updates");
-  updates = new Map(list.map((u) => [u.modId, u]));
+  const r = await invoke("check_updates");
+  updates = new Map(r.updates.map((u) => [u.modId, u]));
+  lastCheck = Date.now();
+  if (r.error) throw new Error(r.error); // CurseForge failed; Git updates above still count
 }
 
 async function checkUpdates() {
   await run("Checking for updates…", loadUpdates);
+  await autoUpdate();
 }
+
+// Runs a check when the last one is older than the interval (timer, window focus, wake).
+async function checkIfDue() {
+  if (ov && ov.checkAppUpdates && Date.now() - lastAppCheck >= AUTO_INTERVAL_MS) checkAppUpdate();
+  if (!ov || !ov.autoUpdates || busy || Date.now() - lastCheck < AUTO_INTERVAL_MS) return;
+  await checkUpdates();
+}
+
+// New version of this app on GitHub. Quiet on failure: it's only a hint.
+async function checkAppUpdate() {
+  lastAppCheck = Date.now();
+  try {
+    appUpdate = await invoke("app_update");
+  } catch {
+    return;
+  }
+  render();
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 async function updateAll(auto) {
   if (![...updates.values()].some((u) => !u.websiteOnly)) return;
   await run("Updating…", async () => {
     const r = await invoke("update_all");
     for (const [id, u] of updates) if (r.updated.includes(u.name)) updates.delete(id);
-    if (r.updated.length) notice = `${auto ? "Automatically updated" : "Updated"} ${r.updated.length} addon${r.updated.length === 1 ? "" : "s"}: ${r.updated.join(", ")}`;
+    const lines = [];
+    if (r.updated.length) lines.push(`${auto ? "Automatically updated" : "Updated"} ${plural(r.updated.length, "addon")}: ${r.updated.join(", ")}.`);
+    if (r.skipped.length) lines.push(`Download from CurseForge yourself: ${r.skipped.join(", ")}.`);
+    if (lines.length) notice = lines.join(" ");
+    if (auto) lastAuto = { time: Date.now(), text: r.updated.length ? `Automatically updated ${r.updated.join(", ")}` : "Nothing to update automatically" };
     if (r.failed.length) throw new Error(`Couldn't update: ${r.failed.join(", ")}. Try its Update button.`);
   });
 }
@@ -278,9 +342,35 @@ async function autoUpdate() {
 
 async function startup() {
   await refresh();
+  if (ov.checkAppUpdates) checkAppUpdate(); // runs alongside the addon checks
   if (ov.hasKey && !ov.installed.length) await scan();
   else await checkUpdates();
+}
+
+// Website-only addons: open the CurseForge download page and explain the next step.
+function startDownload(url, name) {
+  openUrl(url);
+  notice = { text: `Downloading ${name} in your browser. When it's done, drag the zip onto this window or choose it here.`,
+    buttons: [{ label: "Install from zip…", action: "install-zip" }] };
+  render();
+}
+
+async function installZips(paths) {
+  if (!paths.length || busy) return false;
+  tab = "installed";
+  notice = null;
+  const ok = await run(`Installing ${paths.length === 1 ? "from zip" : `${paths.length} zips`}…`, async () => {
+    await invoke("install_zips", { paths });
+    await loadUpdates();
+  });
   await autoUpdate();
+  return ok;
+}
+
+async function chooseZips() {
+  if (!T) return;
+  const picked = await T.dialog.open({ multiple: true, title: "Choose addon zips", filters: [{ name: "Addon zip", extensions: ["zip"] }] });
+  if (picked) await installZips(Array.isArray(picked) ? picked : [picked]);
 }
 
 async function loadMore(batches) {
@@ -336,8 +426,9 @@ function showMenu(button, items) {
 function addonMenu(button, a) {
   const items = [];
   if (a.websiteUrl) items.push({ label: a.kind === "git" ? "Open Repository" : "Open on CurseForge", run: () => openUrl(a.websiteUrl) });
-  if (a.kind !== "curseforge") items.push({ label: a.kind === "git" ? "Reinstall from Git" : "Reinstall from Folder", run: () => run(`Reinstalling ${a.name}…`, () => invoke("reinstall", { modId: a.modId }).then(() => updates.delete(a.modId))) });
-  if (a.kind === "folder" && a.sourceURL) items.push({ label: "Show Source Folder", run: () => reveal(a.sourceURL) });
+  const fromZip = a.kind === "folder" && isZip(a.sourceURL);
+  if (a.kind !== "curseforge") items.push({ label: a.kind === "git" ? "Reinstall from Git" : fromZip ? "Reinstall from Zip" : "Reinstall from Folder", run: () => run(`Reinstalling ${a.name}…`, () => invoke("reinstall", { modId: a.modId }).then(() => updates.delete(a.modId))) });
+  if (a.kind === "folder" && a.sourceURL) items.push({ label: fromZip ? "Show Zip" : "Show Source Folder", run: () => reveal(a.sourceURL) });
   if (a.folders.length) items.push({ label: "Show in Folder", run: () => reveal(addonPath(a.folders[0])) });
   items.push({ label: a.ignored ? "Turn Updates On" : "Turn Updates Off", run: async () => {
     await invoke("set_ignored", { modId: a.modId, ignored: !a.ignored });
@@ -361,6 +452,7 @@ async function openSettings() {
   $("#set-path").value = s.addonsPath;
   $("#set-release").value = String(s.releaseType);
   $("#set-auto").checked = ov.autoUpdates;
+  $("#set-app-update").checked = ov.checkAppUpdates;
   $("#app-version").textContent = `Version ${ov.appVersion}`;
   $("#settings").showModal();
   if (ov.hasKey && $("#set-gvt").options.length < 2) {
@@ -379,9 +471,13 @@ async function saveSettings() {
     releaseType: Number($("#set-release").value),
     gameVersionTypeId: Number($("#set-gvt").value),
     autoUpdates: $("#set-auto").checked,
+    checkAppUpdates: $("#set-app-update").checked,
   } });
   await refresh();
-  if (!wasAuto && ov.autoUpdates) { await checkUpdates(); await autoUpdate(); }
+  if (!ov.checkAppUpdates) appUpdate = null;
+  else if (!lastAppCheck) checkAppUpdate();
+  if (!wasAuto && ov.autoUpdates) await checkUpdates();
+  render();
 }
 
 // ---------- events ----------
@@ -399,7 +495,18 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (t.dataset.source) { source = t.dataset.source; render(); fillIfNeeded(); return; }
-  if (t.dataset.dismiss) { if (t.dataset.dismiss === "error") error = null; else notice = null; render(); return; }
+  if (t.dataset.dismiss) {
+    const what = t.dataset.dismiss;
+    if (what === "error") error = null;
+    else if (what === "app-update") {
+      // Hidden until the next version comes out.
+      const version = appUpdate && appUpdate.version;
+      appUpdate = null;
+      if (version) invoke("dismiss_app_update", { version }).catch(() => {});
+    } else notice = null;
+    render();
+    return;
+  }
   const id = Number(t.dataset.id);
   switch (t.dataset.action) {
     case "settings": openSettings(); break;
@@ -408,10 +515,18 @@ document.addEventListener("click", async (e) => {
       run(`Updating ${u ? u.name : ""}…`, () => invoke("update", { modId: id }).then(() => updates.delete(id)));
       break;
     }
-    case "website": openUrl((ov.installed.find((a) => a.modId === id) || {}).websiteUrl); break;
+    case "download": startDownload(t.dataset.url, t.dataset.name); break;
+    case "install-zip": chooseZips(); break;
     case "install": {
       const m = catalog.concat(lookedUp ? [lookedUp] : []).find((x) => x.id === id);
-      run(`Installing ${m ? m.name : ""}…`, () => invoke("install_mod", { modId: id }));
+      run(`Installing ${m ? m.name : ""}…`, async () => {
+        const manual = await invoke("install_mod", { modId: id });
+        if (manual && manual.length) {
+          notice = { text: `Installed ${m ? m.name : "the addon"}. It also needs ${manual.map((d) => d.name).join(", ")}, which ${manual.length === 1 ? "its author only allows" : "their authors only allow"} downloading from CurseForge.`,
+            buttons: manual.filter((d) => d.downloadPage).slice(0, 3).map((d) => ({ label: `Download ${d.name}`, url: d.downloadPage }))
+              .concat([{ label: "Install from zip…", action: "install-zip" }]) };
+        }
+      });
       break;
     }
     case "open": openUrl(t.dataset.url); break;
@@ -452,14 +567,22 @@ $("#git-url").addEventListener("input", render);
 $("#git-url").addEventListener("keydown", (e) => e.key === "Enter" && installGit());
 $("#git-install").onclick = installGit;
 
+// From file: a zip goes through the zip install (CurseForge match + update check), a folder is copied.
 const installFolder = async () => {
   const path = $("#folder-path").value.trim();
-  if (path && (await run("Copying folder…", () => invoke("install_folder", { path })))) $("#folder-path").value = "";
+  if (!path) return;
+  const ok = isZip(path) ? await installZips([path]) : await run("Copying folder…", () => invoke("install_folder", { path }));
+  if (ok) $("#folder-path").value = "";
   render();
 };
 $("#folder-path").addEventListener("input", render);
 $("#folder-path").addEventListener("keydown", (e) => e.key === "Enter" && installFolder());
 $("#folder-install").onclick = installFolder;
+$("#file-choose-zip").onclick = async () => {
+  if (!T) return;
+  const zip = await T.dialog.open({ title: "Choose an addon zip", filters: [{ name: "Addon zip", extensions: ["zip"] }] });
+  if (zip) { $("#folder-path").value = zip; render(); }
+};
 $("#folder-choose").onclick = async () => {
   if (!T) return;
   const dir = await T.dialog.open({ directory: true, title: "Choose an addon folder (it contains a .toc file)" });
@@ -500,7 +623,7 @@ $("#set-path-choose").onclick = async () => {
   const dir = await T.dialog.open({ directory: true, defaultPath: $("#set-path").value, title: "Choose the Interface/AddOns folder" });
   if (dir) { $("#set-path").value = dir; saveSettings(); }
 };
-for (const id of ["#set-path", "#set-release", "#set-gvt", "#set-auto"]) $(id).addEventListener("change", saveSettings);
+for (const id of ["#set-path", "#set-release", "#set-gvt", "#set-auto", "#set-app-update"]) $(id).addEventListener("change", saveSettings);
 
 // Drag and drop zips (for addons whose authors only allow downloads from CurseForge).
 if (T) {
@@ -511,12 +634,7 @@ if (T) {
     else if (p.type === "leave") $("#drop").hidden = true;
     else if (p.type === "drop") {
       $("#drop").hidden = true;
-      if (!zips.length || busy) return;
-      tab = "installed";
-      await run("Installing from zip…", async () => {
-        await invoke("install_zips", { paths: zips });
-        await loadUpdates();
-      });
+      await installZips(zips);
     }
   });
 }
@@ -534,10 +652,10 @@ async function boot() {
     await new Promise((res) => { const s = document.createElement("script"); s.src = "dev-mock.js"; s.onload = res; document.head.append(s); });
   }
   await startup();
-  setInterval(async () => {
-    if (!ov || !ov.autoUpdates || busy) return;
-    await checkUpdates();
-    await autoUpdate();
-  }, AUTO_INTERVAL_MS);
+  // Timers can pause while the computer sleeps or the window is hidden, so also check when
+  // the window comes back.
+  setInterval(checkIfDue, 5 * 60 * 1000);
+  window.addEventListener("focus", checkIfDue);
+  document.addEventListener("visibilitychange", () => !document.hidden && checkIfDue());
 }
 boot();

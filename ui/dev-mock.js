@@ -131,8 +131,8 @@ window.__mock = async (cmd, args) => {
   await new Promise((r) => setTimeout(r, SCREENSHOT ? 0 : 150));
   if (SCREENSHOT) {
     if (cmd === "overview") return { ...SCREENSHOT_STATE, autoUpdates: false, hasKey: true, addonsPathExists: true, appVersion: "1.0.0" };
-    if (cmd === "check_updates") return [{ modId: 1660202, name: "Spoken Audio: Gossip", versionLabel: "SpokenQuestsAudioGossip 2.7.2", websiteOnly: false }];
-    if (cmd === "browse") return args.excluding.length ? [] : SCREENSHOT_CATALOG;
+    if (cmd === "check_updates") return { updates: [{ modId: 1660202, name: "Spoken Audio: Gossip", versionLabel: "SpokenQuestsAudioGossip 2.7.2", websiteOnly: false }] };
+    if (cmd === "browse") return args.excluding.length ? [] : SCREENSHOT_CATALOG.map((m) => ({ ...m, websiteOnly: m.allowModDistribution === false }));
   }
   const s = window.__mockState ||= {
     installed: [
@@ -146,18 +146,28 @@ window.__mock = async (cmd, args) => {
     settings: { addonsPath: "/Applications/World of Warcraft/_forever_/Interface/AddOns", gameVersionTypeId: 88568, releaseType: 1 },
   };
   switch (cmd) {
-    case "overview": return { ...s, autoUpdates: true, hasKey: true, addonsPathExists: true, appVersion: "0.1.0" };
-    case "check_updates": return [{ modId: 1700375, name: "Spoken", versionLabel: "Spoken 3.11.0", websiteOnly: false },
-                                  { modId: 1697760, name: "EZFishing", versionLabel: "v1.1.3", websiteOnly: true }];
+    case "overview": return { ...s, autoUpdates: true, checkAppUpdates: s.checkAppUpdates ?? true, hasKey: true, addonsPathExists: true, appVersion: "1.0.0" };
+    case "app_update": return s.checkAppUpdates === false || s.dismissedApp === "1.1.0" ? null
+      : { version: "1.1.0", url: "https://github.com/chromag316/forever-addon-manager/releases/tag/v1.1.0" };
+    case "dismiss_app_update": s.dismissedApp = args.version; return null;
+    case "save_settings": s.checkAppUpdates = args.settings.checkAppUpdates; return null;
+    case "check_updates": return { updates: [
+      { modId: 1700375, name: "Spoken", versionLabel: "Spoken 3.11.0", websiteOnly: false },
+      { modId: 1697760, name: "EZFishing", versionLabel: "v1.1.3", websiteOnly: true, downloadPage: "https://www.curseforge.com/wow/addons/ezfishing/download/1" },
+      { modId: -618085760, name: "Forged Forever Auction House", versionLabel: "0.9.0", websiteOnly: false },
+    ] };
     case "browse": {
       // 10 pages of 20 sample addons; set window.__mockFail = true to simulate a network error.
       if (window.__mockFail) throw "Couldn't connect to CurseForge. Check your internet connection.";
       const start = args.excluding.length;
       if (start >= 200) return [];
+      // Every third sample is website-only, like Details! or DBM.
       return Array.from({ length: 20 }, (_, i) => ({ id: 5000 + start + i, name: `Sample Addon ${start + i + 1}`,
-        summary: "A sample addon used for previewing the list.", downloadCount: 1000 * (start + i + 1) }));
+        summary: "A sample addon used for previewing the list.", downloadCount: 1000 * (start + i + 1),
+        websiteOnly: (start + i) % 3 === 1, targetFileId: 9000000 + start + i, slug: `sample-addon-${start + i + 1}` }));
     }
-    case "update_all": return { updated: ["Spoken"], failed: [] };
+    case "install_mod": return [{ name: "Sample Library", downloadPage: "https://www.curseforge.com/wow/addons/sample-library/download/1" }];
+    case "update_all": return { updated: ["Forged Forever Auction House", "Spoken"], failed: [], skipped: ["EZFishing"] };
     case "version_types": return [{ id: 88568, name: "WoW Forever" }];
     case "test_key": return "Key length: 60 characters.\n✅ CurseForge accepted the key.";
     case "set_key": return null;

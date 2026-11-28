@@ -28,6 +28,7 @@ struct Overview {
     untracked: Vec<String>,
     settings: Settings,
     auto_updates: bool,
+    check_app_updates: bool,
     has_key: bool,
     addons_path_exists: bool,
     app_version: String,
@@ -42,6 +43,7 @@ async fn overview(app: tauri::AppHandle, m: Shared<'_>) -> R<Overview> {
         untracked: m.untracked(),
         settings: m.state.settings.clone(),
         auto_updates: m.state.settings.auto_updates(),
+        check_app_updates: m.state.settings.check_app_updates(),
         has_key: !m.api_key().is_empty(),
         addons_path_exists: m.addons_dir().is_dir(),
         app_version: app.package_info().version.to_string(),
@@ -54,8 +56,8 @@ async fn scan(m: Shared<'_>) -> R<usize> {
 }
 
 #[tauri::command]
-async fn check_updates(m: Shared<'_>) -> R<Vec<PendingUpdate>> {
-    m.lock().await.check_updates().await
+async fn check_updates(m: Shared<'_>) -> R<UpdateCheck> {
+    Ok(m.lock().await.check_updates().await)
 }
 
 #[tauri::command]
@@ -63,20 +65,13 @@ async fn update(m: Shared<'_>, mod_id: i64) -> R<()> {
     m.lock().await.update(mod_id).await
 }
 
-#[derive(Serialize)]
-struct UpdateAllResult {
-    updated: Vec<String>,
-    failed: Vec<String>,
-}
-
 #[tauri::command]
 async fn update_all(m: Shared<'_>) -> R<UpdateAllResult> {
-    let (updated, failed) = m.lock().await.update_all().await;
-    Ok(UpdateAllResult { updated, failed })
+    Ok(m.lock().await.update_all().await)
 }
 
 #[tauri::command]
-async fn install_mod(m: Shared<'_>, mod_id: i64) -> R<()> {
+async fn install_mod(m: Shared<'_>, mod_id: i64) -> R<Vec<WebsiteOnlyAddon>> {
     m.lock().await.install_mod(mod_id).await
 }
 
@@ -87,6 +82,10 @@ async fn install_git(m: Shared<'_>, url: String) -> R<()> {
 
 #[tauri::command]
 async fn install_folder(m: Shared<'_>, path: String) -> R<()> {
+    // The "From file" tab takes either an addon folder or a zip.
+    if path.trim().to_lowercase().ends_with(".zip") {
+        return m.lock().await.install_zip(&path).await;
+    }
     m.lock().await.install_folder(&path)
 }
 
@@ -119,20 +118,25 @@ async fn set_ignored(m: Shared<'_>, mod_id: i64, ignored: bool) -> R<()> {
 /// available to personal API keys).
 #[tauri::command]
 async fn browse(m: Shared<'_>, excluding: Vec<i64>) -> R<Vec<CfMod>> {
-    let (api, gvt) = {
+    let (api, gvt, rt) = {
         let m = m.lock().await;
-        (m.api(), m.state.settings.game_version_type_id)
+        (m.api(), m.state.settings.game_version_type_id, m.state.settings.release_type)
     };
     let page = api.featured(gvt, &excluding).await?;
     let mut seen: HashSet<i64> = excluding.into_iter().collect();
     Ok(page.featured.into_iter().chain(page.popular).chain(page.recently_updated)
-        .filter(|x| seen.insert(x.id)).collect())
+        .filter(|x| seen.insert(x.id))
+        .map(|mut x| { x.annotate(gvt, rt); x })
+        .collect())
 }
 
 #[tauri::command]
 async fn lookup(m: Shared<'_>, mod_id: i64) -> R<Option<CfMod>> {
-    let api = m.lock().await.api();
-    Ok(api.mods(&[mod_id]).await?.into_iter().next())
+    let (api, gvt, rt) = {
+        let m = m.lock().await;
+        (m.api(), m.state.settings.game_version_type_id, m.state.settings.release_type)
+    };
+    Ok(api.mods(&[mod_id]).await?.into_iter().next().map(|mut x| { x.annotate(gvt, rt); x }))
 }
 
 #[derive(Deserialize)]
@@ -142,6 +146,12 @@ struct SettingsInput {
     release_type: i64,
     game_version_type_id: i64,
     auto_updates: bool,
+    #[serde(default = "yes")]
+    check_app_updates: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -152,6 +162,29 @@ async fn save_settings(m: Shared<'_>, settings: SettingsInput) -> R<()> {
     s.release_type = settings.release_type.clamp(1, 3);
     s.game_version_type_id = settings.game_version_type_id;
     s.auto_update = Some(settings.auto_updates);
+    s.check_app_update = Some(settings.check_app_updates);
+    m.save();
+    Ok(())
+}
+
+/// A newer version of this app, unless checking is off or the user dismissed that version.
+#[tauri::command]
+async fn app_update(app: tauri::AppHandle, m: Shared<'_>) -> R<Option<AppUpdate>> {
+    let (on, dismissed) = {
+        let m = m.lock().await;
+        (m.state.settings.check_app_updates(), m.state.settings.dismissed_app_version.clone())
+    };
+    if !on {
+        return Ok(None);
+    }
+    let found = crate::core::app_update::check(&app.package_info().version.to_string()).await?;
+    Ok(found.filter(|u| Some(&u.version) != dismissed.as_ref()))
+}
+
+#[tauri::command]
+async fn dismiss_app_update(m: Shared<'_>, version: String) -> R<()> {
+    let mut m = m.lock().await;
+    m.state.settings.dismissed_app_version = Some(version);
     m.save();
     Ok(())
 }
@@ -189,7 +222,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             overview, scan, check_updates, update, update_all, install_mod, install_git, install_folder,
             install_zips, reinstall, uninstall, set_ignored, browse, lookup, save_settings, set_key,
-            test_key, version_types
+            test_key, version_types, app_update, dismiss_app_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Forever AddOn Manager");

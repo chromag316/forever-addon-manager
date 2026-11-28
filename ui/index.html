@@ -59,10 +59,11 @@
       <div class="segmented small" id="source-picker">
         <button data-source="curseforge" class="active">CurseForge</button>
         <button data-source="git">Git</button>
-        <button data-source="folder">Folder</button>
+        <button data-source="folder">From file</button>
       </div>
 
       <div id="src-curseforge" class="source">
+        <p class="help intro">Addons marked <span class="badge">CurseForge only</span> can only be downloaded on the CurseForge website, by their author's choice. Download the zip there, then drag it onto this window or install it on the <button class="link inline" data-source="folder">From file</button> tab. The app still tracks and checks them for updates.</p>
         <div class="field-row">
           <input id="cf-filter" type="search" placeholder="Search addons by name or Project ID" autocomplete="off">
         </div>
@@ -72,21 +73,22 @@
       </div>
 
       <div id="src-git" class="source" hidden>
+        <p class="help intro">Installs the latest GitHub release if there is one, otherwise the default branch. Add /tree/&lt;branch&gt; to the URL to follow a branch. Other Git hosts are cloned.</p>
         <div class="field-row">
           <input id="git-url" type="text" placeholder="https://github.com/user/addon" autocomplete="off" spellcheck="false">
           <button id="git-install" class="btn primary">Install</button>
         </div>
-        <p class="help">Installs the latest GitHub release if there is one, otherwise the default branch. Add /tree/&lt;branch&gt; to the URL to follow a branch. Other Git hosts are cloned.</p>
         <ul id="git-list" class="list"></ul>
       </div>
 
       <div id="src-folder" class="source" hidden>
+        <p class="help intro">Installs an addon from a zip (for example one downloaded from CurseForge) or copies an addon folder into AddOns. You can also drag zips onto this window. Zips CurseForge recognises are tracked as CurseForge addons and checked for updates; everything else can be reinstalled from its file on the Installed tab.</p>
         <div class="field-row">
-          <input id="folder-path" type="text" placeholder="Choose an addon folder…" autocomplete="off" spellcheck="false">
-          <button id="folder-choose" class="btn square" title="Choose a folder"><svg><use href="#i-folder"/></svg></button>
+          <input id="folder-path" type="text" placeholder="Choose an addon zip or folder…" autocomplete="off" spellcheck="false">
+          <button id="file-choose-zip" class="btn" title="Choose a zip file">Zip…</button>
+          <button id="folder-choose" class="btn" title="Choose a folder">Folder…</button>
           <button id="folder-install" class="btn primary">Install</button>
         </div>
-        <p class="help">Copies an addon folder (or a folder containing several addons) into AddOns. Use Reinstall on the Installed tab to copy it again after changes.</p>
         <ul id="folder-list" class="list"></ul>
       </div>
     </section>
@@ -122,7 +124,10 @@
         </label>
       </div>
       <label class="check"><input id="set-auto" type="checkbox">
-        <span>Install updates automatically<small>When the app opens and every 4 hours while it's open. Skips addons with updates turned off and website-only addons. WoW loads new versions after /reload.</small></span>
+        <span>Install updates automatically<small>When the app opens, after each check for updates, and every 4 hours while it's open. Skips addons with updates turned off and website-only addons. WoW loads new versions after /reload.</small></span>
+      </label>
+      <label class="check"><input id="set-app-update" type="checkbox">
+        <span>Tell me when a new version of Forever AddOn Manager is out<small>Checks the app's GitHub releases page when the app opens and every 4 hours. Nothing is downloaded or installed automatically.</small></span>
       </label>
       <div class="dialog-actions">
         <span id="app-version" class="muted"></span>
